@@ -210,24 +210,28 @@ This is critical for resumability. If the user comes back in a new conversation,
 
 ## GENERATION
 
-Once benefits and screenshot pairings are confirmed, generate the final App Store screenshots using Nano Banana Pro (via the Gemini MCP server).
+Once benefits and screenshot pairings are confirmed, generate the final App Store screenshots using Nano Banana Pro via the bundled `enhance.py` wrapper.
 
 ### Prerequisites Check
 
-Before generating, verify the Gemini MCP server is available by checking that the `generate_image` tool exists. If it is NOT available, tell the user:
+Before generating, verify the `GEMINI_API_KEY` environment variable is set. Run:
 
-```
-⚠️ Gemini MCP server not detected. To generate screenshots, you need to set it up:
-
-1. Install: npm install -g gemini-mcp
-2. Add to your Claude Code MCP config (~/.claude/settings.json or project .mcp.json)
-3. Restart Claude Code
-4. Run this skill again
-
-See: https://github.com/nicobailon/gemini-mcp for setup instructions.
+```bash
+test -n "$GEMINI_API_KEY" && echo OK || echo MISSING
 ```
 
-Do NOT proceed with generation if the tool is unavailable.
+If it prints `MISSING`, tell the user:
+
+```
+⚠️ GEMINI_API_KEY is not set. Generation uses Google's Nano Banana Pro model directly.
+
+1. Get a key at https://aistudio.google.com/apikey
+2. Export it in your shell config (e.g. ~/.zshrc):
+     export GEMINI_API_KEY="..."
+3. Open a new terminal (or `source` the file) and re-run this skill.
+```
+
+Do NOT proceed with generation if the key is unavailable.
 
 ### App Store Connect Dimensions
 
@@ -241,7 +245,7 @@ App Store Connect is **very strict** about image dimensions — it will reject s
 
 Default to **1290 x 2796px** (iPhone 6.7") unless the user specifies otherwise. Ask the user which size(s) they need. Up to 10 screenshots can be uploaded per display size.
 
-**IMPORTANT — Aspect ratio mismatch**: Apple's required dimensions are narrower than standard 9:16 (~0.461 ratio vs 0.5625). Nano Banana generates at preset aspect ratios, so we generate **wider than needed** at 9:16 with 4K resolution, then **crop and resize** down to exact Apple dimensions in a post-processing step (see Step 4 below). This approach avoids stretching — we remove excess width instead.
+**IMPORTANT — Aspect ratio mismatch**: Apple's required dimensions are narrower than standard 9:16 (~0.461 ratio vs 0.5625). Nano Banana generates at preset aspect ratios, so we generate **wider than needed** at 9:16, then **crop and resize** down to exact Apple dimensions in a post-processing step (see Step 4 below). This approach avoids stretching — we remove excess width instead.
 
 ### Screenshot Format Specification
 
@@ -321,20 +325,35 @@ The scaffolds are internal intermediates — do NOT show them to the user or ask
 
 **Step 2: Enhance with Nano Banana Pro (3 versions in parallel)**
 
-Make **3 parallel `edit_image` calls**. The parallel execution is critical — always fire all 3 calls in a single message, never sequentially.
+Generation uses `enhance.py` — a small wrapper around Google's `google-genai` SDK that lives in the skill directory. Run it via `uv run` so dependencies auto-install on first use.
 
-For each of the 3 calls, use:
-- `prompt`: Enhancement instructions (see prompt templates below — different for first vs subsequent screenshots)
-- `images`: See below for which images to include
-- `outputPath`: Different path for each version:
-  - `./screenshots/01-[benefit-slug]/v1.jpg`
-  - `./screenshots/01-[benefit-slug]/v2.jpg`
-  - `./screenshots/01-[benefit-slug]/v3.jpg`
+Write the enhancement prompt to a single shared file first (it is identical across all 3 versions for a given benefit), then fire **3 parallel `Bash` tool calls** — one per version — in a single assistant message. Parallel execution is critical; never run them sequentially.
+
+```bash
+# Write the prompt once, reuse for all 3 versions
+mkdir -p screenshots/01-[benefit-slug]
+cat > screenshots/01-[benefit-slug]/prompt.txt <<'EOF'
+[PROMPT BODY — see templates below]
+EOF
+```
+
+Then, in a single message, emit 3 parallel `Bash` calls, one per version:
+
+```bash
+SKILL_DIR="$HOME/.claude/skills/aso-appstore-screenshots"
+uv run "$SKILL_DIR/enhance.py" \
+  --prompt-file screenshots/01-[benefit-slug]/prompt.txt \
+  --image screenshots/01-[benefit-slug]/scaffold.png \
+  [--image screenshots/final/01-[first-benefit-slug].jpg]  # only for subsequent screenshots
+  --output screenshots/01-[benefit-slug]/v1.jpg
+```
+
+Vary only the `--output` path between the 3 calls (`v1.jpg`, `v2.jpg`, `v3.jpg`). Each `enhance.py` invocation makes a single Nano Banana Pro call and writes the returned image to `--output`.
 
 #### First screenshot (no approved template yet)
 
-Use only the scaffold as input:
-- `images`: The scaffold via `filePath` pointing to `screenshots/01-[benefit-slug]/scaffold.png`
+Pass only the scaffold as `--image`:
+- `--image screenshots/01-[benefit-slug]/scaffold.png`
 
 **First screenshot prompt template:**
 
@@ -361,9 +380,9 @@ The final result should look like it was designed by a professional App Store sc
 
 #### Subsequent screenshots (after first is approved)
 
-Use **two images** as input:
-1. The **scaffold** for this benefit (`screenshots/0N-[benefit-slug]/scaffold.png`) — defines the layout
-2. The **first approved screenshot** (`screenshots/final/01-[first-benefit-slug].jpg`) — defines the style template
+Pass **two `--image` flags**, order matters:
+1. `--image screenshots/0N-[benefit-slug]/scaffold.png` — the scaffold for this benefit, defines the layout (referred to in the prompt as "FIRST image")
+2. `--image screenshots/final/01-[first-benefit-slug].jpg` — the first approved screenshot, defines the style template (referred to in the prompt as "SECOND image")
 
 **Subsequent screenshot prompt template:**
 
@@ -394,7 +413,7 @@ No watermarks, no extra text, no app store UI chrome.
 
 **Step 3: IMMEDIATELY crop and resize ALL 3 versions to App Store dimensions**
 
-⚠️ **You MUST run this immediately after all 3 `edit_image` calls complete. Do NOT show the user any image before running this. The raw Nano Banana output is always the wrong dimensions for App Store Connect.**
+⚠️ **You MUST run this immediately after all 3 `enhance.py` calls complete. Do NOT show the user any image before running this. The raw Nano Banana output is always the wrong dimensions for App Store Connect.**
 
 **CRITICAL — Use exactly ONE Bash tool call for all 3 crop/resize operations.** Do NOT make 3 separate Bash calls. Do NOT use parallel Bash calls. Use the single loop below so the user only sees one permission prompt:
 
@@ -429,10 +448,10 @@ Label them clearly as **Version 1**, **Version 2**, and **Version 3** and ask th
 
 **Step 5: Iterate if needed**
 
-If the user wants changes, use `edit_image` with **three images** as input:
-1. The **scaffold** (`scaffold.png`) — anchors the layout (text position, device placement, screenshot)
-2. The **style template** (the first approved screenshot from `screenshots/final/01-*.jpg`) — defines the device frame rendering and overall visual style that must be consistent across the entire set
-3. The **approved design** (the version the user liked best for this specific screenshot) — anchors the creative direction and breakout element approach
+If the user wants changes, call `enhance.py` with **three `--image` flags**, in this order:
+1. `--image screenshots/0N-[benefit-slug]/scaffold.png` — anchors the layout (text position, device placement, screenshot)
+2. `--image screenshots/final/01-[first-benefit-slug].jpg` — the style template; defines the device frame rendering and overall visual style that must be consistent across the entire set
+3. `--image screenshots/0N-[benefit-slug]/vN-resized.jpg` — the approved design the user liked best for this specific screenshot; anchors the creative direction and breakout element approach
 
 The prompt should reference all three:
 ```
@@ -448,7 +467,7 @@ Generate a new version that keeps the layout from the scaffold, the device frame
 
 This prevents drift (scaffold keeps layout locked), maintains set-wide consistency (style template keeps device frame and visual treatment identical), and preserves the creative direction the user already approved.
 
-When iterating, generate **3 versions in parallel** again (3 parallel `edit_image` calls in a single message). Then **immediately run the Step 3 crop/resize loop on all 3 in a single Bash call** before showing the user.
+When iterating, generate **3 versions in parallel** again (3 parallel `Bash` calls invoking `enhance.py` in a single message). Then **immediately run the Step 3 crop/resize loop on all 3 in a single Bash call** before showing the user.
 
 Repeat until the user is happy.
 
