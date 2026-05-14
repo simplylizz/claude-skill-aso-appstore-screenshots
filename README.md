@@ -2,6 +2,8 @@
 
 A Claude Code skill that generates high-converting App Store screenshots for your iOS app. It analyzes your codebase, identifies core benefits, and creates professional screenshot images using AI.
 
+> Fork of [adamlyttleapps/claude-skill-aso-appstore-screenshots](https://github.com/adamlyttleapps/claude-skill-aso-appstore-screenshots) — swaps the `gemini-mcp` dependency for a direct `google-genai` SDK call via the bundled `enhance.py` wrapper.
+
 ## What It Does
 
 1. **Benefit Discovery** — Analyzes your app's codebase to identify the 3-5 core benefits that drive downloads
@@ -14,7 +16,7 @@ A Claude Code skill that generates high-converting App Store screenshots for you
 ### 1. Add the skill to Claude Code
 
 ```bash
-claude install-skill github.com/adamlyttleapps/claude-skill-aso-appstore-screenshots
+claude install-skill github.com/simplylizz/claude-skill-aso-appstore-screenshots
 ```
 
 ### 2. Install `uv`
