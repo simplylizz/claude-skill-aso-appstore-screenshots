@@ -297,15 +297,15 @@ The compose.py script lives in the skill directory. Run it to create the determi
 ```bash
 SKILL_DIR="$HOME/.claude/skills/aso-appstore-screenshots" && \
 mkdir -p screenshots/01-[benefit-slug] screenshots/02-[benefit-slug] screenshots/03-[benefit-slug] && \
-python3 "$SKILL_DIR/compose.py" \
+uv run "$SKILL_DIR/compose.py" \
   --bg "[HEX CODE]" --verb "[VERB 1]" --desc "[DESC 1]" \
   --screenshot [path/to/screenshot-1.png] \
   --output screenshots/01-[benefit-slug]/scaffold.png && \
-python3 "$SKILL_DIR/compose.py" \
+uv run "$SKILL_DIR/compose.py" \
   --bg "[HEX CODE]" --verb "[VERB 2]" --desc "[DESC 2]" \
   --screenshot [path/to/screenshot-2.png] \
   --output screenshots/02-[benefit-slug]/scaffold.png && \
-python3 "$SKILL_DIR/compose.py" \
+uv run "$SKILL_DIR/compose.py" \
   --bg "[HEX CODE]" --verb "[VERB 3]" --desc "[DESC 3]" \
   --screenshot [path/to/screenshot-3.png] \
   --output screenshots/03-[benefit-slug]/scaffold.png
@@ -533,7 +533,7 @@ Once ALL screenshots in the set are approved and saved to `final/`, generate a s
 ```bash
 SKILL_DIR="$HOME/.claude/skills/aso-appstore-screenshots"
 
-python3 "$SKILL_DIR/showcase.py" \
+uv run "$SKILL_DIR/showcase.py" \
   --screenshots screenshots/final/01-*.jpg screenshots/final/02-*.jpg screenshots/final/03-*.jpg \
   --github "github.com/adamlyttleapps" \
   --output screenshots/showcase.png

@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.9"
+# dependencies = [
+#   "pillow",
+# ]
+# ///
 """
 Showcase Image Generator
 Creates a preview image showing up to 3 final App Store screenshots
@@ -6,13 +12,14 @@ side-by-side on a white background with an optional GitHub link at the bottom.
 """
 
 import argparse
+import os
 from PIL import Image, ImageDraw, ImageFont
 
 # ── Layout ──────────────────────────────────────────────────────────
 PADDING = 60
 GAP = 40
 BOTTOM_BAR_H = 100
-FONT_PATH = "/Library/Fonts/SF-Pro-Display-Regular.otf"
+FONT_PATH = os.path.join(os.path.dirname(__file__), "assets", "fonts", "Inter-Regular.otf")
 FONT_SIZE_MAX = 48
 FONT_SIZE_MIN = 16
 TEXT_COLOUR = "#000000"
@@ -23,11 +30,7 @@ def fit_text_font(text, max_w, size_max, size_min):
     """Return the largest font size where text fits within max_w."""
     dummy = ImageDraw.Draw(Image.new("RGB", (1, 1)))
     for size in range(size_max, size_min - 1, -2):
-        try:
-            font = ImageFont.truetype(FONT_PATH, size)
-        except OSError:
-            font = ImageFont.load_default()
-            return font
+        font = ImageFont.truetype(FONT_PATH, size)
         bbox = dummy.textbbox((0, 0), text, font=font)
         if (bbox[2] - bbox[0]) <= max_w:
             return font

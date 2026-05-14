@@ -17,21 +17,16 @@ A Claude Code skill that generates high-converting App Store screenshots for you
 claude install-skill github.com/adamlyttleapps/claude-skill-aso-appstore-screenshots
 ```
 
-### 2. Install Python dependencies
+### 2. Install `uv`
+
+The Python scripts are run via [`uv`](https://docs.astral.sh/uv/), which auto-installs their dependencies (Pillow) into an ephemeral environment on first run — no `pip install` needed.
 
 ```bash
-pip install Pillow
+brew install uv
+# or: curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-### 3. Font requirement
-
-The skill uses **SF Pro Display Black** for headline text. On macOS, install it from [Apple's developer fonts](https://developer.apple.com/fonts/). The expected path is:
-
-```
-/Library/Fonts/SF-Pro-Display-Black.otf
-```
-
-### 4. Set up Gemini MCP (for AI enhancement)
+### 3. Set up Gemini MCP (for AI enhancement)
 
 The generation phase requires [@houtini/gemini-mcp](https://www.npmjs.com/package/@houtini/gemini-mcp) to be configured as an MCP server in Claude Code:
 

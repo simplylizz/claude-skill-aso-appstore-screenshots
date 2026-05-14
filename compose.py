@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.9"
+# dependencies = [
+#   "pillow",
+# ]
+# ///
 """
 App Store Screenshot Composer
 Composites headline text, device frame template, and app screenshot
@@ -35,7 +41,7 @@ DESC_LINE_GAP = 24
 MAX_TEXT_W = int(CANVAS_W * 0.92)
 MAX_VERB_W = int(CANVAS_W * 0.92)
 
-FONT_PATH = "/Library/Fonts/SF-Pro-Display-Black.otf"
+FONT_PATH = os.path.join(os.path.dirname(__file__), "assets", "fonts", "InterDisplay-Black.otf")
 FRAME_PATH = os.path.join(os.path.dirname(__file__), "assets", "device_frame.png")
 
 

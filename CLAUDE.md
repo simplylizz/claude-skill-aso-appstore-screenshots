@@ -15,14 +15,12 @@ Four files + one asset make up the skill:
 - **generate_frame.py** — Generates the device frame template PNG (`assets/device_frame.png`). Run once to create or update the template. The template is a 1290×2796 RGBA PNG with a black iPhone body, transparent screen cutout, Dynamic Island, and side buttons.
 - **showcase.py** — Generates a showcase image showing up to 3 final screenshots side-by-side with an optional GitHub link at the bottom. Used as the final step after all screenshots are approved.
 - **assets/device_frame.png** — Pre-rendered iPhone device frame template used by compose.py. Using a template instead of drawing the frame at compose time ensures pixel-perfect consistency across all generated screenshots.
+- **assets/fonts/** — Bundled Inter fonts (SIL OFL): `InterDisplay-Black.otf` for headlines (compose.py), `Inter-Regular.otf` for the showcase URL (showcase.py), and `LICENSE-Inter.txt`.
 
 ## Running compose.py
 
 ```bash
-# Requires: pip install Pillow
-# Requires: SF Pro Display Black font at /Library/Fonts/SF-Pro-Display-Black.otf
-
-python3 compose.py \
+uv run compose.py \
   --bg "#E31837" \
   --verb "TRACK" \
   --desc "TRADING CARD PRICES" \
@@ -35,7 +33,7 @@ python3 compose.py \
 
 - **Two-stage generation**: compose.py creates a deterministic scaffold first (text + frame + screenshot), then Nano Banana Pro enhances it. This avoids the inconsistencies of generating from scratch.
 - **compose.py outputs exact App Store Connect dimensions** (1290×2796 for iPhone 6.7") — no post-processing crop needed.
-- **Device frame is a template image** (`assets/device_frame.png`) — not drawn at compose time. Regenerate with `python3 generate_frame.py` if the frame design needs updating.
+- **Device frame is a template image** (`assets/device_frame.png`) — not drawn at compose time. Regenerate with `uv run generate_frame.py` if the frame design needs updating.
 - **Verb text auto-sizes** — shrinks from 172px down to 100px to fit multi-word verbs (e.g. "TURN YOURSELF") within the canvas width.
 - **SKILL.md always generates 3 versions in parallel** for each benefit so the user can pick the best one.
 - **The crop/resize step in SKILL.md is mandatory** after every `generate_image` or `edit_image` call — raw Nano Banana output is never the correct dimensions for App Store Connect.
