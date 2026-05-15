@@ -8,8 +8,9 @@ A Claude Code skill that generates high-converting App Store screenshots for you
 
 1. **Benefit Discovery** — Analyzes your app's codebase to identify the 3-5 core benefits that drive downloads
 2. **Screenshot Pairing** — Reviews your simulator screenshots, rates them, and pairs each with the best benefit
-3. **Generation** — Creates polished App Store screenshots using a two-stage process: deterministic scaffolding (compose.py) + AI enhancement (Nano Banana Pro via the bundled `enhance.py` wrapper)
-4. **Showcase** — Generates a preview image with all screenshots side-by-side
+3. **iPhone Generation** — Creates polished iPhone App Store screenshots using a two-stage process: deterministic scaffolding (`compose.py`) + AI enhancement (Nano Banana Pro via the bundled `enhance.py` wrapper)
+4. **Showcase** — Generates a preview image with all iPhone screenshots side-by-side
+5. **iPad Extension (optional)** — After the iPhone set is approved, the skill asks whether you want to also generate a matching iPad set at 2064×2752 using `compose_ipad.py` + the same `enhance.py` wrapper. If you say yes, it reuses your benefits and brand colour and just needs iPad simulator screenshots; if you decline, it stops.
 
 ## Installation
 
@@ -66,29 +67,42 @@ Screenshots are saved to a `screenshots/` directory in your project:
 
 ```
 screenshots/
-  01-benefit-slug/          ← working versions
+  01-benefit-slug/          ← working iPhone versions
     scaffold.png            ← deterministic compose.py output
-    v1.png, v2.png, v3.png  ← AI-enhanced versions
-    v1-resized.png, ...     ← cropped to App Store dimensions
-  final/                    ← approved screenshots, ready to upload
-    01-benefit-slug.png
-    02-benefit-slug.png
-  showcase.png              ← preview image with all screenshots
+    v1.jpg, v2.jpg, v3.jpg  ← AI-enhanced versions
+    v1-resized.jpg, ...     ← cropped to iPhone App Store dimensions
+  final/                    ← approved iPhone screenshots, ready to upload
+    01-benefit-slug.jpg
+    02-benefit-slug.jpg
+  showcase.png              ← iPhone showcase
+
+  # Only if you opt into the iPad extension:
+  ipad/                     ← working iPad versions
+    01-benefit-slug/
+      scaffold.png
+      v1.jpg, v2.jpg, v3.jpg
+      v1-resized.jpg, ...   ← resized to iPad App Store dimensions
+  final-ipad/               ← approved iPad screenshots, ready to upload
+    01-benefit-slug.jpg
+  showcase-ipad.png         ← iPad showcase
 ```
 
-The `final/` folder contains App Store-ready screenshots at exact Apple dimensions (default: 1290×2796px for iPhone 6.7").
+The `final/` and `final-ipad/` folders contain App Store-ready screenshots at exact Apple dimensions (iPhone 6.7" default 1290×2796; iPad 13" Pro default 2064×2752).
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `SKILL.md` | The skill prompt — defines the multi-phase workflow |
-| `compose.py` | Deterministic scaffold generator (Pillow-based) |
-| `enhance.py` | Nano Banana Pro image-edit wrapper (`google-genai` SDK) |
-| `generate_frame.py` | Generates the device frame template |
-| `showcase.py` | Generates the side-by-side showcase image |
+| `SKILL.md` | The skill prompt — defines the multi-phase workflow (iPhone, then optional iPad) |
+| `compose.py` | Deterministic iPhone scaffold generator (Pillow-based, 1290×2796) |
+| `compose_ipad.py` | Deterministic iPad scaffold generator (Pillow-based, 2064×2752) |
+| `enhance.py` | Nano Banana Pro image-edit wrapper (`google-genai` SDK), shared by both pipelines |
+| `generate_frame.py` | Generates the iPhone device frame template |
+| `generate_frame_ipad.py` | Generates the iPad device frame template |
+| `showcase.py` | Generates the side-by-side showcase image (works for iPhone or iPad finals) |
 | `assets/device_frame.png` | Pre-rendered iPhone device frame template |
-| `assets/fonts/` | Bundled Inter fonts (SIL OFL) used by compose.py and showcase.py |
+| `assets/device_frame_ipad.png` | Pre-rendered iPad device frame template |
+| `assets/fonts/` | Bundled Inter fonts (SIL OFL) used by the compose and showcase scripts |
 
 ## License
 

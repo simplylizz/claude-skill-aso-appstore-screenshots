@@ -17,10 +17,11 @@ Before doing ANY codebase analysis, check the Claude Code memory system for all 
 **Check memory for each of these (in order):**
 
 1. **Benefits** — confirmed benefit headlines + target audience + app context
-2. **Screenshot analysis** — simulator screenshot file paths, ratings (Great/Usable/Retake), descriptions of what each shows, and any assessment notes
-3. **Pairings** — which simulator screenshot is paired with which benefit
+2. **iPhone screenshot analysis** — simulator screenshot file paths, ratings (Great/Usable/Retake), descriptions, assessment notes
+3. **iPhone pairings** — which simulator screenshot is paired with which benefit
 4. **Brand colour** — the confirmed background colour (name + hex)
-5. **Generated screenshots** — file paths to generated and resized screenshots, which benefits they correspond to
+5. **iPhone generated screenshots** — file paths to generated and resized screenshots, which benefits they correspond to
+6. **iPad state** (optional extension) — iPad raw screenshot paths, pairings, iPad finals. Only present if the user opted into iPad after iPhone was complete.
 
 **Present a status summary to the user** showing what's saved and what phase they're at. For example:
 
@@ -28,12 +29,13 @@ Before doing ANY codebase analysis, check the Claude Code memory system for all 
 Here's where we left off:
 
 ✅ Benefits (3 confirmed): TRACK CARD PRICES, SEARCH ANY CARD, BUILD YOUR COLLECTION
-✅ Screenshots analysed (5 provided, 4 rated Great/Usable)
-✅ Pairings confirmed
+✅ iPhone screenshots analysed (5 provided, 4 rated Great/Usable)
+✅ iPhone pairings confirmed
 ✅ Brand colour: Electric Blue (#2563EB)
-⏳ Generation: 2 of 3 screenshots generated
+✅ iPhone generation: 3 of 3 screenshots approved
+⏳ iPad extension: not started (optional)
 
-Ready to continue generating screenshot 3, or would you like to change anything?
+Ready to start the iPad set, or would you like to change anything about the iPhone set?
 ```
 
 **Then let the user decide what to do:**
@@ -559,6 +561,223 @@ uv run "$SKILL_DIR/showcase.py" \
 ```
 
 Show the showcase image to the user using the Read tool. This is a shareable preview of the full screenshot set.
+
+### Offer the iPad Extension
+
+After the iPhone showcase is shown and the user is happy with the set, **explicitly offer** the optional iPad extension:
+
+```
+Your iPhone set is complete. Want me to also generate the iPad set?
+
+The iPad set is a separate, optional step. It reuses your benefits and brand colour, but
+needs iPad simulator screenshots (different aspect ratio) and uses a different device frame.
+
+Reply "yes" to start, or "no" / "later" to stop here. You can always come back and run
+the skill again to add the iPad set later — memory persists.
+```
+
+If the user declines, stop. If they accept, proceed to the **IPAD EXTENSION** phase below.
+
+---
+
+## IPAD EXTENSION (Optional, After iPhone Approved)
+
+This phase is **opt-in** and only runs after the iPhone set is complete and approved. Skip it entirely unless the user explicitly opts in.
+
+### Prerequisites
+
+Before starting:
+
+1. **iPhone finals must exist** — `screenshots/final/0N-*.jpg` for every confirmed benefit. If they don't, tell the user to finish iPhone first and stop.
+2. **Benefits and brand colour are reused** from memory — do NOT re-run Benefit Discovery. Same app, same benefits.
+3. **`GEMINI_API_KEY` must be set** (same check as the iPhone generation phase).
+
+### App Store Connect iPad Dimensions
+
+Apple's iPad portrait sizes:
+
+| Display | Portrait | Landscape |
+|---------|----------|-----------|
+| iPad 13" Pro (default) | 2064 x 2752px | 2752 x 2064px |
+| iPad 12.9" | 2048 x 2732px | 2732 x 2048px |
+| iPad 11" | 1668 x 2388px | 2388 x 1668px |
+
+Default to **2064 x 2752px** (iPad 13" Pro). Ask the user which size(s) they need if unclear.
+
+**Aspect note**: Nano Banana Pro outputs at ~0.747 aspect (e.g. 896×1200), which is virtually identical to iPad 13" Pro's 0.750. **No center-crop step is needed** — just resize the raw Gemini output to the target pixel dimensions. This is the main pipeline difference vs iPhone (which DOES need the side-crop because iPhone's narrower aspect doesn't match Gemini's output).
+
+### Step 1: Collect iPad Simulator Screenshots
+
+Ask the user for iPad simulator screenshots — these are **different captures** than the iPhone ones (different aspect ratio, often different layout). They can provide:
+- A directory (e.g., `./simulator-screenshots/ipad/`)
+- Individual file paths
+- Glob patterns
+
+Use the Read tool to view each one. Apply the same rating logic (Great / Usable / Retake) and the same retake coaching from the iPhone Screenshot Pairing phase.
+
+### Step 2: Pair iPad Screenshots with the Same Benefits
+
+The benefits are fixed (already approved during iPhone). Pair each benefit to the best **iPad** screenshot. Present pairings the same way as the iPhone phase. Do not change benefit wording.
+
+If a benefit has no suitable iPad screenshot, pause and ask the user to capture one. Don't proceed with placeholders.
+
+### Step 3: Save iPad Pairings to Memory
+
+Save iPad raw screenshot paths + pairings to memory. Use a separate file (e.g., `aso_ipad_pairings.md`) so iPad state is independent of iPhone state. Cross-link with `[[aso-benefits]]` and `[[aso-screenshot-pairings]]`.
+
+### Step 4: Generate iPad Scaffolds with `compose_ipad.py`
+
+The skill ships a dedicated iPad compositor and frame template:
+- `compose_ipad.py` — outputs 2064×2752 PNGs, iPad-specific typography (smaller verb size, larger headline-to-device gap to avoid overlap)
+- `assets/device_frame_ipad.png` — pre-rendered iPad frame (thin uniform bezels, camera dot at top, no Dynamic Island)
+
+**IMPORTANT — Batch all 3 scaffolds into a single Bash call** (same parallelization pattern as iPhone):
+
+```bash
+SKILL_DIR="$HOME/.claude/skills/aso-appstore-screenshots" && \
+mkdir -p screenshots/ipad/01-[benefit-slug] screenshots/ipad/02-[benefit-slug] screenshots/ipad/03-[benefit-slug] && \
+uv run "$SKILL_DIR/compose_ipad.py" \
+  --bg "[HEX CODE]" --verb "[VERB 1]" --desc "[DESC 1]" \
+  --screenshot [path/to/ipad-screenshot-1.png] \
+  --output screenshots/ipad/01-[benefit-slug]/scaffold.png && \
+uv run "$SKILL_DIR/compose_ipad.py" \
+  --bg "[HEX CODE]" --verb "[VERB 2]" --desc "[DESC 2]" \
+  --screenshot [path/to/ipad-screenshot-2.png] \
+  --output screenshots/ipad/02-[benefit-slug]/scaffold.png && \
+uv run "$SKILL_DIR/compose_ipad.py" \
+  --bg "[HEX CODE]" --verb "[VERB 3]" --desc "[DESC 3]" \
+  --screenshot [path/to/ipad-screenshot-3.png] \
+  --output screenshots/ipad/03-[benefit-slug]/scaffold.png
+```
+
+Like the iPhone scaffolds, these are intermediates — don't show them to the user.
+
+### Step 5: Enhance with Nano Banana Pro (3 parallel versions)
+
+The flow mirrors the iPhone enhancement (3 parallel `enhance.py` calls in a single message). Two key differences:
+
+1. **Do NOT pass the iPhone style template as a reference image.** The iPhone finals are the wrong aspect and wrong device — they will confuse Gemini. The iPad set has its **own** style template (the first approved iPad screenshot, set during the first iPad benefit).
+2. **iPad-specific prompt language** — call out the iPad device frame explicitly, and avoid prompt phrasing that triggers known regressions (see "iPad gotchas" below).
+
+#### First iPad screenshot (no iPad style template yet)
+
+Pass only the scaffold as `--image`. Use the **iPad first-screenshot prompt template** below:
+
+```
+This is a SCAFFOLD for an iPad App Store screenshot — a rough layout showing the correct headline text, iPad device frame position, and app screenshot placement. Your job is to transform this into a polished, professional App Store marketing screenshot for the iPad.
+
+KEEP EXACTLY AS-IS:
+- The headline text (wording, position, and approximate size)
+- The app screenshot shown on the iPad screen — including any tabs, pills, navigation chrome, and UI labels exactly as they appear
+- The background colour (solid flat #[HEX])
+
+ENHANCE AND POLISH:
+- Replace the placeholder device frame with a photorealistic iPad Pro 13" mockup — uniform thin bezels on all four sides (NOT iPhone-style asymmetric bezels), no Dynamic Island, no notch, optional tiny front camera dot at the top centre. Keep the same size and position as the scaffold.
+- The output must be iPad portrait aspect (near 3:4, not the 9:19.5 phone shape). Do not crop or letterbox to phone dimensions.
+- OPTIONALLY add a PRIMARY breakout — same rules as iPhone (entire UI panel only, kept at the SAME vertical position and orientation as on screen, scaled up to overlap both bezel edges, soft drop shadow). If no panel clearly relates to the headline, skip the breakout entirely.
+[PRIMARY BREAKOUT — describe the specific iPad UI panel to pop out, or "No breakout — the app screen speaks for itself."]
+- Optionally add 1-2 small secondary elements that reinforce the benefit. Do not invent fake category headers, fake subtitles, or fake AI banners.
+[SECONDARY ELEMENTS (optional) — 0-2 small supporting elements, or "None needed"]
+- Background must be a clean solid brand colour. No glows, gradients, radial patterns, or light effects.
+
+No watermarks, no extra text, no app store UI chrome. Output must be iPad portrait aspect.
+```
+
+#### Subsequent iPad screenshots (after the first is approved)
+
+Pass **two `--image` flags** — order matters:
+1. `--image screenshots/ipad/0N-[benefit-slug]/scaffold.png` — the scaffold (FIRST image)
+2. `--image screenshots/final-ipad/01-[first-benefit-slug].jpg` — the first approved **iPad** screenshot (SECOND image, style template)
+
+Use the **iPad subsequent-screenshot prompt template** — same shape as the iPhone subsequent template, but with iPad device frame language and the "no AI banner / no fake subtitles" guards from the gotchas section.
+
+### Step 6: Resize to App Store Dimensions (No Center-Crop)
+
+⚠️ Run this immediately after all 3 `enhance.py` calls complete, before showing the user anything.
+
+**Single Bash call for all 3** (one permission prompt):
+
+```bash
+TARGET_W=2064 && TARGET_H=2752 && \
+for INPUT in screenshots/ipad/01-[benefit-slug]/v1.jpg screenshots/ipad/01-[benefit-slug]/v2.jpg screenshots/ipad/01-[benefit-slug]/v3.jpg; do
+  OUTPUT="${INPUT%.jpg}-resized.jpg"
+  cp "$INPUT" "$OUTPUT"
+  sips -z $TARGET_H $TARGET_W "$OUTPUT"
+  echo "--- $OUTPUT ---"
+  sips -g pixelWidth -g pixelHeight "$OUTPUT"
+done
+```
+
+Why no crop step: Gemini outputs at ~0.747 aspect; iPad 13" Pro target is 0.750. The difference is small enough that a straight resize is correct — cropping would needlessly trim pixels.
+
+Target dimensions per iPad size:
+- iPad 13" Pro (default): `TARGET_W=2064 TARGET_H=2752`
+- iPad 12.9": `TARGET_W=2048 TARGET_H=2732`
+- iPad 11": `TARGET_W=1668 TARGET_H=2388`
+
+### Step 7: Review, Iterate, and Approve
+
+Show the user the 3 **resized** versions and ask them to pick. Iteration follows the same 3-image pattern as iPhone (scaffold + iPad style template + previous approved design as the creative anchor). Repeat until the user is happy.
+
+### Step 8: Copy Approved Version to `final-ipad/`
+
+```bash
+mkdir -p screenshots/final-ipad
+cp "screenshots/ipad/01-[benefit-slug]/v2-resized.jpg" "screenshots/final-ipad/01-[benefit-slug].jpg"
+```
+
+The first approved iPad final becomes the iPad style template for all subsequent iPad screenshots.
+
+### Step 9: iPad Showcase
+
+After ALL iPad screenshots are approved, generate an iPad showcase image. Same `showcase.py` script, just point it at the iPad finals:
+
+```bash
+SKILL_DIR="$HOME/.claude/skills/aso-appstore-screenshots"
+uv run "$SKILL_DIR/showcase.py" \
+  --screenshots screenshots/final-ipad/01-*.jpg screenshots/final-ipad/02-*.jpg screenshots/final-ipad/03-*.jpg \
+  --github "[same URL as iPhone showcase]" \
+  --output screenshots/showcase-ipad.png
+```
+
+### iPad Output Structure
+
+```
+screenshots/
+  ipad/                              ← working iPad versions
+    01-[benefit-slug]/
+      scaffold.png
+      v1.jpg, v2.jpg, v3.jpg
+      v1-resized.jpg, ...
+    02-[benefit-slug]/
+      ...
+  final-ipad/                        ← approved iPad screenshots, ready to upload
+    01-[benefit-slug].jpg
+    02-[benefit-slug].jpg
+    ...
+  showcase-ipad.png                  ← iPad showcase
+```
+
+Kept separate from the iPhone `screenshots/01-*/` and `screenshots/final/` folders so the two sets don't collide.
+
+### iPad Gotchas (KNOWN, DO NOT REPEAT)
+
+These are mistakes that have happened in real iPad runs. Read this section before writing any iPad prompts.
+
+- **No "AI banner" prompts.** Phrases like _"optionally add a subtle 'AI' pictogram or scanning-line motif on the row"_ get interpreted by Gemini as a full-width horizontal `AI` banner above the breakout, which looks meaningless. When the benefit is AI-related, convey it via the **headline** and the **visual content** (e.g. four near-identical thumbnails for "find similar photos"). Use at most a single tiny gold sparkle or crown accent. Explicitly include a guardrail in the prompt: _"Do NOT add any horizontal banner, header bar, or full-width strip with the text 'AI'."_
+- **No iPhone tab bars on iPad screens.** If the app's actual iPad UI uses a top pill / sidebar / iPad-native navigation (e.g. a "Home / Settings" pill at the top), the prompt must say so explicitly. Otherwise Gemini tends to "fix" the layout by inventing an iPhone-style bottom tab bar that doesn't exist in the real app.
+- **Don't let Gemini fill dead space.** Some iPad home screens have legitimate empty space below the main content. Gemini's instinct is to "fill" with fake category headers or invented subtitles. The prompt must reinforce: _"Keep the app screenshot exactly as captured — do not invent extra UI elements, fake category subtitles, or filler content to occupy empty space."_
+- **Typography is pre-tuned in `compose_ipad.py`.** The current constants (verb 200-300px, desc 140px, DEVICE_Y=860, text_top=180) give a safe headline-to-device gap. Do not edit these unless the user reports a specific overlap or padding issue — earlier values (verb 360, DEVICE_Y=760) caused ~110px overlap of headline onto the device frame.
+- **First-screenshot anchor matters.** The first approved iPad screenshot becomes the style template for the entire iPad set. If it has a regression (phantom tab bar, fake subtitles, AI banner), every subsequent screenshot inherits it. Re-generate the first one until it's clean before moving on.
+
+### Save iPad State to Memory
+
+Update generation memory **incrementally** as each iPad screenshot is approved (mirror the iPhone pattern). Track separately:
+
+- iPad target display size (e.g., iPad 13" Pro 2064×2752)
+- For each iPad screenshot: benefit, working folder, approved version, final path, iPad raw screenshot used, gotchas hit / avoided
+
+This keeps iPad resumable across conversations the same way iPhone is.
 
 ---
 
