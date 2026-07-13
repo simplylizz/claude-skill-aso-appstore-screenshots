@@ -11,6 +11,8 @@ Output: assets/device_frame.png — standalone device image (not positioned on c
 compose.py positions this dynamically based on text height.
 """
 
+import os
+
 from PIL import Image, ImageDraw, ImageChops
 
 # ── Device dimensions ───────────────────────────────────────────────
@@ -69,28 +71,30 @@ def generate():
     btn_color = (25, 25, 25, 255)
     fd2 = ImageDraw.Draw(frame)
 
+    # Buttons are drawn just INSIDE the device edge (the template width is
+    # fixed because compose paste math depends on it, so they can't protrude).
     # Power button (right side)
     fd2.rounded_rectangle(
-        [DEVICE_W, 340, DEVICE_W + 4, 460],
+        [DEVICE_W - 5, 340, DEVICE_W - 1, 460],
         radius=2, fill=btn_color,
     )
     # Volume up (left side)
     fd2.rounded_rectangle(
-        [-4, 280, 0, 360],
+        [0, 280, 4, 360],
         radius=2, fill=btn_color,
     )
     # Volume down (left side)
     fd2.rounded_rectangle(
-        [-4, 380, 0, 460],
+        [0, 380, 4, 460],
         radius=2, fill=btn_color,
     )
     # Silent switch (left side)
     fd2.rounded_rectangle(
-        [-4, 180, 0, 220],
+        [0, 180, 4, 220],
         radius=2, fill=btn_color,
     )
 
-    out = "assets/device_frame.png"
+    out = os.path.join(os.path.dirname(__file__), "assets", "device_frame.png")
     frame.save(out, "PNG")
     print(f"✓ {out} ({DEVICE_W}×{DEVICE_H})")
     print(f"  BEZEL={BEZEL}, SCREEN_W={SCREEN_W}, SCREEN_H={SCREEN_H}")

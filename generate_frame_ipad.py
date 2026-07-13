@@ -11,6 +11,8 @@ Output: assets/device_frame_ipad.png — standalone device image (not positioned
 compose_ipad.py positions this dynamically based on text height.
 """
 
+import os
+
 from PIL import Image, ImageDraw, ImageChops
 
 # ── Device dimensions ───────────────────────────────────────────────
@@ -68,22 +70,24 @@ def generate():
     btn_color = (25, 25, 25, 255)
     fd2 = ImageDraw.Draw(frame)
 
+    # Buttons are drawn just INSIDE the top edge (the template height is fixed
+    # because compose paste math depends on it, so they can't protrude).
     # Power button (top-right edge)
     fd2.rounded_rectangle(
-        [DEVICE_W - 220, -4, DEVICE_W - 120, 0],
+        [DEVICE_W - 220, 0, DEVICE_W - 120, 4],
         radius=2, fill=btn_color,
     )
     # Volume buttons (top-left edge, two)
     fd2.rounded_rectangle(
-        [120, -4, 220, 0],
+        [120, 0, 220, 4],
         radius=2, fill=btn_color,
     )
     fd2.rounded_rectangle(
-        [240, -4, 340, 0],
+        [240, 0, 340, 4],
         radius=2, fill=btn_color,
     )
 
-    out = "assets/device_frame_ipad.png"
+    out = os.path.join(os.path.dirname(__file__), "assets", "device_frame_ipad.png")
     frame.save(out, "PNG")
     print(f"✓ {out} ({DEVICE_W}×{DEVICE_H})")
     print(f"  BEZEL={BEZEL}, SCREEN_W={SCREEN_W}, SCREEN_H={SCREEN_H}")

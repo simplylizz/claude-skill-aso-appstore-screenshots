@@ -7,13 +7,17 @@
 # ///
 """
 Showcase Image Generator
-Creates a preview image showing up to 3 final App Store screenshots
-side-by-side on a white background with an optional GitHub link at the bottom.
+Creates a preview image showing the final App Store screenshots side-by-side
+on a white background with an optional GitHub link at the bottom. Accepts any
+number of screenshots (the pipeline passes all finals, typically 3-5).
 """
 
 import argparse
 import os
+
 from PIL import Image, ImageDraw, ImageFont
+
+from compose_common import die
 
 # ── Layout ──────────────────────────────────────────────────────────
 PADDING = 60
@@ -38,7 +42,10 @@ def fit_text_font(text, max_w, size_max, size_min):
 
 
 def create_showcase(screenshots, output_path, github_url=None):
-    # Load screenshots
+    # Load screenshots (checking each path exists first)
+    for p in screenshots:
+        if not os.path.isfile(p):
+            die(f"screenshot not found: {p}")
     images = [Image.open(p).convert("RGBA") for p in screenshots]
 
     # Scale all to same height
@@ -85,7 +92,7 @@ def main():
         "--screenshots",
         nargs="+",
         required=True,
-        help="Paths to final screenshot PNGs (up to 3)",
+        help="Paths to the final screenshot images (JPG or PNG); pass all finals",
     )
     p.add_argument("--output", required=True, help="Output file path")
     p.add_argument("--github", default=None, help="GitHub URL to display at bottom")
