@@ -93,8 +93,18 @@ def _cjk_script(text):
         or 0xF900 <= ord(c) <= 0xFAFF
         for c in text
     ):
-        return "zh"
+        return "zh-Hant" if any(c in _HANT_INDICATORS for c in text) else "zh"
     return None
+
+
+# Common Traditional-only forms (their Simplified counterparts differ), enough
+# to flip a Han-only headline to the TC face. Shared ideographs stay 'zh' —
+# PingFang SC renders those identically, so false negatives are harmless;
+# a false 'zh' on genuinely Traditional text just means SC glyph variants.
+_HANT_INDICATORS = set(
+    "釋幾鐘騰數從選過鍵刪廢圖併裝雲傳輕鬆盈庫置訊視錄體張們來後點麼書車馬鳥魚"
+    "門開關為當縮聞龍發變讓與歲時實現對將專業畫質談讀寫學習億萬條紀約總結構"
+)
 
 
 # Per-script candidate faces, tried in order. Each entry is
@@ -109,9 +119,22 @@ _CJK_CANDIDATES = {
         ("/System/Library/Fonts/ヒラギノ角ゴシック W7.ttc", "hiragino sans", ["w7", "w6"]),
         ("/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc", "hiragino sans", ["w6"]),
     ],
-    "zh": [
-        ("/System/Library/Fonts/PingFang.ttc", "pingfang sc", ["heavy", "semibold", "bold", "medium", "regular"]),
+    # Prefer a real TC face when PingFang.ttc is on disk (it isn't on recent
+    # macOS — PingFang moved into a PIL-unreadable private .ttc), else fall
+    # back to the same heavy faces as 'zh': weight consistency across the set
+    # beats TC glyph-variant purity, and traditional-only codepoints render
+    # with their correct forms in these fonts anyway.
+    "zh-Hant": [
+        ("/System/Library/Fonts/PingFang.ttc", "pingfang tc", ["heavy", "semibold", "bold", "medium", "regular"]),
         ("/System/Library/Fonts/Hiragino Sans GB.ttc", "hiragino sans gb", ["w6", "w3"]),
+        ("/System/Library/Fonts/STHeiti Medium.ttc", "heiti tc", ["medium"]),
+    ],
+    "zh": [
+        ("/System/Library/Fonts/Hiragino Sans GB.ttc", "hiragino sans gb", ["w6", "w3"]),
+        # PingFang.ttc was removed from /System/Library/Fonts on modern macOS
+        # (only a Reserved PingFangUI.ttc remains, in a private framework dir);
+        # kept as a legacy-path candidate for older systems where it exists.
+        ("/System/Library/Fonts/PingFang.ttc", "pingfang sc", ["heavy", "semibold", "bold", "medium", "regular"]),
         ("/System/Library/Fonts/STHeiti Medium.ttc", "heiti sc", ["medium"]),
         ("/System/Library/Fonts/Supplemental/Songti.ttc", "songti sc", ["black", "bold"]),
     ],
