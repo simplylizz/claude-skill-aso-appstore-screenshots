@@ -72,16 +72,20 @@ uv run "$SKILL_DIR/compose_ipad.py" \
 
 Like the iPhone scaffolds, these are intermediates — don't show them to the user. But before firing the paid enhance calls, **Read each scaffold image yourself and verify**: headline wording correct, text does not overlap the device frame, correct background colour. Fix any that fail (re-run `compose_ipad.py`) before spending money on enhancement.
 
-## Step 5: Enhance with Nano Banana Pro (3 parallel versions)
+## Step 5: Enhance with Nano Banana Pro
 
-When iPad generation begins, tell the user roughly how many paid image calls the iPad set will take — at least 3 × N benefits, plus any iteration rounds.
+**Version count matches the iPhone policy — it depends on whether an iPad style template exists yet:**
+- **The FIRST iPad screenshot** (no approved iPad style template yet): generate **3 versions in parallel** so the user can pick the best one. That approved pick becomes the iPad style template.
+- **Every SUBSEQUENT iPad screenshot (2..N)**: the scaffold pins the layout and the approved iPad style template pins the device rendering, background, and typography, so generate **ONE version** (a single enhance call with scaffold + iPad style template), post-process it, self-check it, and present that one. Only if the user **rejects it or asks for alternatives** do you fan out with 2-3 parallel alternative calls, rewriting the PRIMARY breakout / SECONDARY elements descriptions from their feedback (not re-rolling the identical prompt).
 
-The flow mirrors the iPhone enhancement (3 parallel `enhance.py` calls in a single message). Every iPad call passes `--aspect-ratio "3:4"`. Two key differences from iPhone:
+When iPad generation begins, tell the user roughly how many paid image calls the iPad set will take — **3 for the first benefit plus 1 for each subsequent benefit** (e.g. at least 5 calls for 3 benefits), plus any iteration rounds.
+
+The flow mirrors the iPhone enhancement. Every iPad call passes `--aspect-ratio "3:4"`. Two key differences from iPhone:
 
 1. **Do NOT pass the iPhone style template as a reference image.** The iPhone finals are the wrong aspect and wrong device — they will confuse Gemini. The iPad set has its **own** style template (the first approved iPad screenshot, set during the first iPad benefit).
 2. **iPad-specific prompt language** — call out the iPad device frame explicitly, and avoid prompt phrasing that triggers known regressions (see "iPad gotchas" below).
 
-Emit 3 parallel `Bash` calls, one per version, varying only `--output` (`v1.jpg`, `v2.jpg`, `v3.jpg`):
+For the first iPad screenshot, emit 3 parallel `Bash` calls in a single message, one per version, varying only `--output` (`v1.jpg`, `v2.jpg`, `v3.jpg`). For a subsequent iPad screenshot, emit a single `enhance.py` call producing just `v1.jpg`:
 
 ```bash
 SKILL_DIR="$HOME/.claude/skills/aso-appstore-screenshots"
@@ -151,9 +155,9 @@ No watermarks, no extra text, no app store UI chrome. Output must be iPad portra
 
 ## Step 6: Resize to App Store Dimensions (No Center-Crop)
 
-⚠️ Run this immediately after all 3 `enhance.py` calls complete, before showing the user anything.
+⚠️ Run this immediately after the `enhance.py` call(s) complete, before showing the user anything.
 
-**Single Bash call for all 3** (one permission prompt):
+**Single Bash call for every version produced this round** (one permission prompt). List exactly the versions produced — all three (`v1 v2 v3`) after a first-screenshot or fan-out round, or just `v1.jpg` after a single-version subsequent generation:
 
 ```bash
 TARGET_W=2064 && TARGET_H=2752 && \
@@ -175,13 +179,13 @@ Target dimensions per iPad size:
 
 ## Step 7: Review, Iterate, and Approve
 
-**Before presenting anything, Read all 3 resized outputs yourself and self-check each**: headline text intact and correctly worded, iPad device frame matches the style template (or looks like a clean photorealistic iPad for the first), background flat and the correct brand colour, and none of the gotchas below present. Regenerate any obviously broken version — capped at **ONE automatic retry** per version before showing the user what you have.
+**Before presenting anything, Read every resized output produced this round yourself and self-check each** (all three after a first-screenshot / fan-out round, or the single `v1-resized.jpg` after a subsequent-screenshot generation): headline text intact and correctly worded, iPad device frame matches the style template (or looks like a clean photorealistic iPad for the first), background flat and the correct brand colour, and none of the gotchas below present. Regenerate any obviously broken version — capped at **ONE automatic retry** per version before showing the user what you have.
 
-Show the user the 3 **resized** versions and ask them to pick or request changes.
+Show the user the **resized** version(s) and ask them to pick or request changes — 3 labelled versions for the first iPad screenshot, or the single version for a subsequent one.
 
-**If the user rejects all 3 versions:** do NOT reuse any rejected version as an anchor. Rewrite the PRIMARY breakout and SECONDARY elements descriptions and re-run the **initial-style call** (for the first iPad screenshot: scaffold-only call, 1 image; for subsequent: 2-image call, scaffold + iPad style template).
+**If the user rejects the version(s) or asks for alternatives:** do NOT reuse any rejected version as an anchor. Rewrite the PRIMARY breakout and SECONDARY elements descriptions and re-run the **initial-style call** (for the first iPad screenshot: scaffold-only call, 1 image; for subsequent: 2-image call, scaffold + iPad style template). For a subsequent screenshot, this is where you fan out to 2-3 parallel alternative calls (varying only `--output`).
 
-**Single-version iteration:** for a small targeted tweak to a version the user already likes, run just **1** enhance call, not 3.
+**Single-version iteration:** for a small targeted tweak to a version the user already likes, run just **1** enhance call.
 
 Iteration reference images (each `enhance.py` call passes `--aspect-ratio "3:4"`):
 
@@ -257,8 +261,9 @@ This keeps iPad resumable across conversations the same way iPhone is.
 
 ## When a Step Fails
 
-- **One of the 3 parallel enhance calls fails**: retry that one call once. If it still fails, proceed with the surviving versions and tell the user.
-- **All 3 fail**: surface the `enhance.py` stderr to the user (it contains the `finish_reason` / safety details) and stop.
+- **A single-version subsequent generation fails**: retry that one call once. If it still fails, surface the `enhance.py` stderr (`finish_reason` / safety details) and stop.
+- **One of several parallel enhance calls fails** (first-screenshot 3× or a fan-out round): retry that one call once. If it still fails, proceed with the surviving versions and tell the user.
+- **All parallel calls in a round fail**: surface the `enhance.py` stderr to the user (it contains the `finish_reason` / safety details) and stop.
 
 ## Offer iPad Localization
 
@@ -267,8 +272,10 @@ After the iPad **English** showcase is shown and the user is happy with the iPad
 ```
 Your iPad set is complete. Want me to also localize it into other languages?
 
-This translates each iPad headline and regenerates each screenshot with the translated
-text, keeping the device, screenshot content, background, and breakouts identical.
+This translates each iPad headline per locale. If your app's UI supports the language,
+you capture localized iPad simulator screenshots and each shot is rebuilt around the
+real localized UI; otherwise only the headline is swapped and the on-screen UI stays
+English.
 
 Reply "yes" to start, or "no" / "later" to stop here. Memory persists, so you can always
 come back and localize later.

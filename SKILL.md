@@ -338,9 +338,11 @@ Generation uses a two-stage approach for consistency:
 
 **The first approved screenshot becomes the style template for the entire set.** All subsequent screenshots are enhanced using both their own scaffold (for layout) AND the first approved screenshot (for style). This ensures every screenshot in the set has the same device frame rendering, text treatment, background style, and overall visual quality — so when viewed side-by-side in the App Store, they look like a cohesive professional set.
 
-For each benefit + screenshot pair, generate **3 enhanced versions in parallel** so the user can pick the best one.
+**Version count depends on whether a style template exists yet:**
+- **The FIRST screenshot of the set** (no approved style template — you are exploring style space): generate **3 enhanced versions in parallel** so the user can pick the best one. That approved pick becomes the style template.
+- **Every SUBSEQUENT screenshot (2..N)**: the scaffold already pins the layout and the approved style template pins the device rendering, background, and typography, so 3 same-prompt versions would only buy sampling noise. Generate **ONE version** (a single enhance call with scaffold + style template), post-process it, self-check it, and present that one to the user. Only if the user **rejects it or asks for alternatives** do you fan out with 2-3 parallel alternative calls — and when you do, **rewrite the PRIMARY breakout / SECONDARY elements descriptions based on their feedback** rather than re-rolling the identical prompt.
 
-**When generation begins, tell the user roughly how many paid image calls the set will take** — at least 3 × N benefits (3 versions each), plus any iteration rounds. For 3 benefits that is at least 9 paid enhance calls. This sets expectations before any billed work starts.
+**When generation begins, tell the user roughly how many paid image calls the set will take** — 3 for the first benefit plus 1 for each subsequent benefit, plus any iteration rounds. For 3 benefits that is **at least 5 paid enhance calls** (3 + 1 + 1). This sets expectations before any billed work starts.
 
 **Step 0: Save brand colour to memory**
 
@@ -379,21 +381,23 @@ This outputs pixel-perfect 1290×2796 PNGs with:
 
 The scaffolds are internal intermediates — do NOT show them to the user or ask for confirmation. But before firing the paid enhance calls, **Read each scaffold image yourself and verify**: (1) the headline wording is correct, (2) the text does not overlap the device frame, (3) the background is the correct brand colour. Fix any scaffold that fails (re-run compose.py) before spending money on enhancement. Then proceed to Step 2 (Nano Banana enhancement).
 
-**Step 2: Enhance with Nano Banana Pro (3 versions in parallel)**
+**Step 2: Enhance with Nano Banana Pro**
 
 Generation uses `enhance.py` — a small wrapper that lives in the skill directory and calls the selected image backend (Google's `google-genai` SDK by default, or the OpenAI codex CLI — see the Prerequisites Check). Run it via `uv run` so dependencies auto-install on first use.
 
-Write the enhancement prompt to a single shared file first (it is identical across all 3 versions for a given benefit), then fire **3 parallel `Bash` tool calls** — one per version — in a single assistant message. Parallel execution is critical; never run them sequentially.
+**How many versions this step produces:**
+- **First screenshot of the set** → **3 versions in parallel**. Write the enhancement prompt to a single shared file first (it is identical across all 3 versions), then fire **3 parallel `Bash` tool calls** — one per version — in a single assistant message. Parallel execution is critical; never run them sequentially.
+- **Subsequent screenshots (2..N)** → **1 version**. Write the prompt to the file, then fire a **single `enhance.py` call** (scaffold + style template). Do not fan out unless the user later rejects it (see Step 4).
 
 ```bash
-# Write the prompt once, reuse for all 3 versions
+# Write the prompt once (reused across versions when generating 3)
 mkdir -p screenshots/01-[benefit-slug]
 cat > screenshots/01-[benefit-slug]/prompt.txt <<'EOF'
 [PROMPT BODY — see templates below]
 EOF
 ```
 
-Then, in a single message, emit 3 parallel `Bash` calls, one per version:
+Then emit the enhance call(s) — for the first screenshot, 3 parallel `Bash` calls in a single message; for subsequent screenshots, one call:
 
 ```bash
 SKILL_DIR="$HOME/.claude/skills/aso-appstore-screenshots"
@@ -405,7 +409,7 @@ uv run "$SKILL_DIR/enhance.py" \
   --output screenshots/01-[benefit-slug]/v1.jpg
 ```
 
-Vary only the `--output` path between the 3 calls (`v1.jpg`, `v2.jpg`, `v3.jpg`). Each `enhance.py` invocation makes a single Nano Banana Pro call and writes the returned image to `--output`. `--aspect-ratio "9:16"` is required on every iPhone call — it makes Gemini return a 0.5625 image that the Step 3 side-crop then narrows to Apple's 0.461.
+When generating 3 (first screenshot), vary only the `--output` path between the calls (`v1.jpg`, `v2.jpg`, `v3.jpg`); for a subsequent screenshot, produce just `v1.jpg`. Each `enhance.py` invocation makes a single Nano Banana Pro call and writes the returned image to `--output`. `--aspect-ratio "9:16"` is required on every iPhone call — it makes Gemini return a 0.5625 image that the Step 3 side-crop then narrows to Apple's 0.461.
 
 #### First screenshot (no approved template yet)
 
@@ -468,11 +472,11 @@ No watermarks, no extra text, no app store UI chrome.
 
 **IMPORTANT — Consistency enforcement**: The scaffold guarantees consistent layout. The style template guarantees consistent visual treatment. If Nano Banana changes the text, layout, or deviates from the style template, regenerate.
 
-**Step 3: IMMEDIATELY crop and resize ALL 3 versions to App Store dimensions**
+**Step 3: IMMEDIATELY crop and resize EVERY version produced this round to App Store dimensions**
 
-⚠️ **You MUST run this immediately after all 3 `enhance.py` calls complete. Do NOT show the user any image before running this. The raw Nano Banana output is always the wrong dimensions for App Store Connect.**
+⚠️ **You MUST run this immediately after the `enhance.py` call(s) complete. Do NOT show the user any image before running this. The raw Nano Banana output is always the wrong dimensions for App Store Connect.**
 
-**CRITICAL — Use exactly ONE Bash tool call for all 3 crop/resize operations.** Do NOT make 3 separate Bash calls. Do NOT use parallel Bash calls. Use the single loop below so the user only sees one permission prompt:
+**CRITICAL — Use exactly ONE Bash tool call for all the crop/resize operations.** Do NOT make separate Bash calls per version. Do NOT use parallel Bash calls. Use the single loop below so the user only sees one permission prompt. List **exactly the versions produced this round** in the `for INPUT in …` list — all three (`v1 v2 v3`) after a first-screenshot or fan-out round, or just `v1.jpg` after a single-version subsequent generation:
 
 ```bash
 TARGET_W=1290 && TARGET_H=2796 && \
@@ -499,22 +503,23 @@ Target dimensions per display size — adjust `TARGET_W` and `TARGET_H`:
 - iPhone 6.5" primary: `TARGET_W=1284 TARGET_H=2778`
 - iPhone 6.5" alternative: `TARGET_W=1242 TARGET_H=2688`
 
-**Step 4: Self-check, then review all 3 versions with the user**
+**Step 4: Self-check, then review the version(s) with the user**
 
-**Before presenting anything, Read all 3 resized outputs yourself and self-check each against the requirements:**
+**Before presenting anything, Read every resized output produced this round yourself and self-check each against the requirements** (all three after a first-screenshot / fan-out round, or the single `v1-resized.jpg` after a subsequent-screenshot generation):
 - Headline text is intact and correctly worded (Gemini did not drop, garble, or rephrase it)
 - The device frame matches the style template (for subsequent screenshots) / looks like a clean photorealistic iPhone (for the first)
 - The background is a flat solid brand colour (no gradients/glows/patterns)
 
 Regenerate any version that is obviously broken — but cap this at **ONE automatic retry** per version. After one retry, show the user whatever you have (even if imperfect) and explain what is off, rather than burning more paid calls silently.
 
-Then present all 3 **resized** versions (the `-resized.jpg` files) to the user using the Read tool. Never show the raw Nano Banana output — always show the post-processed versions.
+Then present the **resized** version(s) (the `-resized.jpg` files) to the user using the Read tool. Never show the raw Nano Banana output — always show the post-processed versions.
 
-Label them clearly as **Version 1**, **Version 2**, and **Version 3** and ask the user to pick their favourite or request changes.
+- **First screenshot (3 versions):** label them clearly as **Version 1**, **Version 2**, and **Version 3** and ask the user to pick their favourite or request changes.
+- **Subsequent screenshot (1 version):** present the single version and ask the user to approve it or request changes. If they want to see alternatives, fan out per the reject/alternatives rule below.
 
-**If the user rejects all 3 versions:** do NOT reuse any rejected version as a creative anchor. Instead, rewrite the PRIMARY breakout and SECONDARY elements descriptions in the prompt (based on the user's feedback) and re-run the **initial-style call** — for the first screenshot that means the scaffold-only call (1 image); for subsequent screenshots the 2-image call (scaffold + style template). Only once the user likes a version does that version become the anchor for further tweaks.
+**If the user rejects the version(s) or asks for alternatives:** do NOT reuse any rejected version as a creative anchor. Instead, rewrite the PRIMARY breakout and SECONDARY elements descriptions in the prompt (based on the user's feedback) and re-run the **initial-style call** — for the first screenshot that means the scaffold-only call (1 image); for subsequent screenshots the 2-image call (scaffold + style template). For a subsequent screenshot this is where you **fan out to 2-3 parallel alternative calls** (varying only `--output`). Only once the user likes a version does that version become the anchor for further tweaks.
 
-**Single-version iteration:** when the user asks for a small, targeted tweak to a version they already like (e.g. "make the breakout a bit bigger"), run just **1 enhance call**, not 3.
+**Single-version iteration:** when the user asks for a small, targeted tweak to a version they already like (e.g. "make the breakout a bit bigger"), run just **1 enhance call**, not several.
 
 **Step 5: Iterate if needed**
 
@@ -545,7 +550,7 @@ Drop the STYLE TEMPLATE paragraph from the iteration prompt entirely (there is n
 
 This prevents drift (scaffold keeps layout locked), maintains set-wide consistency (style template keeps device frame and visual treatment identical), and preserves the creative direction the user already approved.
 
-When iterating with a fresh set of options, generate **3 versions in parallel** again (3 parallel `Bash` calls invoking `enhance.py` in a single message); for a small targeted tweak, run just **1** call (see Step 4). Then **immediately run the Step 3 crop/resize loop on the outputs in a single Bash call** before showing the user.
+When the user rejected everything and wants a fresh set of options, fan out to **2-3 versions in parallel** (2-3 parallel `Bash` calls invoking `enhance.py` in a single message) with rewritten breakout/secondary descriptions; for a small targeted tweak to a version they already like, run just **1** call (see Step 4). Then **immediately run the Step 3 crop/resize loop on whatever outputs were produced this round, in a single Bash call** before showing the user.
 
 Repeat until the user is happy.
 
@@ -564,8 +569,9 @@ This keeps `final/` clean — only approved, App Store-ready screenshots, one pe
 
 Enhancement calls can fail (safety blocks, quota, transient API errors). Handle failures gracefully:
 
-- **One of the 3 parallel enhance calls fails**: retry that one call once. If it still fails, proceed with the surviving versions (present 2, or even 1) and tell the user one generation failed.
-- **All 3 fail**: surface the `enhance.py` stderr to the user (it contains the `finish_reason` / safety details that explain why) and stop — do not silently loop.
+- **A single-version subsequent generation fails**: retry that one call once. If it still fails, surface the `enhance.py` stderr (it contains the `finish_reason` / safety details) and stop — do not silently loop.
+- **One of several parallel enhance calls fails** (first-screenshot 3× or a fan-out round): retry that one call once. If it still fails, proceed with the surviving versions (present 2, or even 1) and tell the user one generation failed.
+- **All parallel calls in a round fail**: surface the `enhance.py` stderr to the user (it contains the `finish_reason` / safety details that explain why) and stop — do not silently loop.
 - **On RECALL**: before presenting the resume summary, verify that file paths stored in memory still exist on disk. Treat any missing file (simulator screenshot, scaffold, or final) as that phase needing redo, and say so instead of reporting it complete.
 
 ### Output
@@ -642,8 +648,10 @@ After the iPhone showcase is shown and the user is happy with the iPhone set, **
 ```
 Your iPhone set is complete. Two optional next steps — pick either, both, or neither:
 
-1. Localize the iPhone set — translate the headlines and regenerate each screenshot in
-   other languages (device, screenshot content, background, and breakouts stay identical).
+1. Localize the iPhone set — translated headlines per locale. If your app's UI supports
+   the language, you capture localized simulator screenshots and each shot is rebuilt
+   around the real localized UI; otherwise only the headline is swapped and the
+   on-screen UI stays English.
 
 2. Create the iPad set — a separate set that reuses your benefits and brand colour but
    needs iPad simulator screenshots (different aspect ratio) and a different device frame.

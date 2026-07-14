@@ -8,10 +8,10 @@ A Claude Code skill that generates high-converting App Store screenshots for you
 
 1. **Benefit Discovery** — Analyzes your app's codebase to identify the 3-5 core benefits that drive downloads
 2. **Screenshot Pairing** — Reviews your simulator screenshots, rates them, and pairs each with the best benefit
-3. **iPhone Generation** — Creates polished iPhone App Store screenshots using a two-stage process: deterministic scaffolding (`compose.py`) + AI enhancement (Nano Banana Pro via the bundled `enhance.py` wrapper)
+3. **iPhone Generation** — Creates polished iPhone App Store screenshots using a two-stage process: deterministic scaffolding (`compose.py`) + AI enhancement (Nano Banana Pro via the bundled `enhance.py` wrapper). The first screenshot is generated as 3 parallel versions and your pick becomes the style template; each subsequent screenshot is generated as a single style-locked version (more versions only if you reject it), so a 3-benefit set costs ~5 enhancement calls, not 9
 4. **Showcase** — Generates a preview image with all iPhone screenshots side-by-side
 5. **iPad Extension (optional)** — After the iPhone set is approved, the skill asks whether you want to also generate a matching iPad set at 2064×2752 using `compose_ipad.py` + the same `enhance.py` wrapper. If you say yes, it reuses your benefits and brand colour and just needs iPad simulator screenshots; if you decline, it stops. This phase is defined in `references/ipad-extension.md`, which the skill loads on demand.
-6. **Localization (optional)** — Once a device's English set is approved, the skill can offer to translate the headlines and regenerate the screenshots per locale (one `enhance.py` call each, reusing the approved English screenshot as the style template). This phase is defined in `references/localization.md`, loaded on demand.
+6. **Localization (optional)** — Once a device's English set is approved, the skill can produce localized sets. Per locale it picks one of two flows: **Flow A** (preferred, when your app's UI is localized) — you capture real localized simulator screenshots (the skill gives you an `xcrun simctl` recipe), it composes per-locale scaffolds with translated headlines, and one style-locked `enhance.py` call per screenshot repaints only the decorative shell; **Flow B** (fallback, UI not localized) — only the headline is swapped on the approved English final, and the on-screen UI intentionally stays English. Both flows cost one enhancement call per screenshot per locale. CJK headlines (Japanese/Korean/Chinese) render via a macOS system font fallback, since the bundled Inter font is Latin-only. Outputs land in `final/<locale>/` (or `final-ipad/<locale>/`). This phase is defined in `references/localization.md`, loaded on demand.
 
 ## Installation
 
@@ -89,16 +89,19 @@ Screenshots are saved to a `screenshots/` directory in your project:
 
 ```
 screenshots/
-  01-benefit-slug/          ← working iPhone versions
+  01-benefit-slug/          ← first screenshot: 3 versions to pick a style from
     scaffold.png            ← deterministic compose.py output
     v1.jpg, v2.jpg, v3.jpg  ← AI-enhanced versions
     v1-resized.jpg, ...     ← cropped to iPhone App Store dimensions
+  02-benefit-slug/          ← subsequent screenshots: one style-locked version
+    scaffold.png
+    v1.jpg, v1-resized.jpg
   final/                    ← approved iPhone screenshots, ready to upload
     01-benefit-slug.jpg
     02-benefit-slug.jpg
   showcase.png              ← iPhone showcase
 
-  # Only if you opt into the iPad extension:
+  # Only if you opt into the iPad extension (same first-vs-subsequent pattern):
   ipad/                     ← working iPad versions
     01-benefit-slug/
       scaffold.png
@@ -107,9 +110,15 @@ screenshots/
   final-ipad/               ← approved iPad screenshots, ready to upload
     01-benefit-slug.jpg
   showcase-ipad.png         ← iPad showcase
+
+  # Only if you opt into localization (one subdirectory per locale):
+  de-DE/                    ← working localized iPhone scaffolds/versions (Flow A)
+  ipad/de-DE/               ← working localized iPad scaffolds/versions (Flow A)
+  final/de-DE/              ← localized iPhone set, ready to upload
+  final-ipad/de-DE/         ← localized iPad set, ready to upload
 ```
 
-The `final/` and `final-ipad/` folders contain App Store-ready screenshots at exact Apple dimensions (iPhone default 1290×2796, a 6.9"-class accepted size; iPad 13" Pro default 2064×2752). Localized runs are written under `final/<locale>/` (and the iPad equivalent).
+The `final/` and `final-ipad/` folders contain App Store-ready screenshots at exact Apple dimensions (iPhone default 1290×2796, a 6.9"-class accepted size; iPad 13" Pro default 2064×2752). The English set stays at the `final/` root; each localized set goes in a subdirectory named by its App Store Connect locale code.
 
 ## Files
 
@@ -118,7 +127,7 @@ The `final/` and `final-ipad/` folders contain App Store-ready screenshots at ex
 | `SKILL.md` | The skill prompt — defines the multi-phase workflow (iPhone, then optional iPad / localization) |
 | `references/ipad-extension.md` | The opt-in iPad phase, loaded by SKILL.md after the iPhone set is approved |
 | `references/localization.md` | The opt-in localization phase, loaded by SKILL.md after a device's English set is approved |
-| `compose_common.py` | Shared Pillow compositing routine, config, and helpers used by both compose scripts |
+| `compose_common.py` | Shared Pillow compositing routine, config, and helpers used by both compose scripts (incl. the CJK system-font fallback for localized headlines) |
 | `compose.py` | Deterministic iPhone scaffold generator (thin wrapper over `compose_common`, 1290×2796) |
 | `compose_ipad.py` | Deterministic iPad scaffold generator (thin wrapper over `compose_common`, 2064×2752) |
 | `enhance.py` | Nano Banana Pro / codex image-edit wrapper (`google-genai` SDK), shared by both pipelines |
