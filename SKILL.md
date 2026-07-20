@@ -345,6 +345,8 @@ The skill ships a high-quality **base template** so the design floor is high —
 Save the confirmed brand colour to the generation state file (`aso_generated_screenshots.md`) — this is its canonical home and it must persist before any rendering. Then create the per-app design directory in the user's project and vendor the assets the final render needs (final renders load ZERO external resources):
 
 ```bash
+# SKILL_DIR resolution rule above: use the base directory shown at skill load;
+# the path below is only the conventional-default fallback.
 SKILL_DIR="$HOME/.claude/skills/aso-appstore-screenshots" && \
 mkdir -p screenshots/design/assets screenshots/design/raw screenshots/design/preview screenshots/final && \
 cp "$SKILL_DIR/assets/html/base.css" screenshots/design/set.css && \
@@ -402,10 +404,10 @@ A breakout is a **magnified copy** of a panel, not a second decoration — so it
 
 **Scale (checked in QA) — know the two numbers, they are not the same:**
 
-- **How big the card READS vs the on-screen original** = `--zoom ÷ --screen-scale` (≈ `--zoom × 1.2` on both devices). This is what makes a breakout feel deliberate, and it does **not** depend on the crop size: `--zoom: 1.0` reads only **~1.2×**, `1.2` reads **~1.5×**, `1.5` reads **~1.9×**. So a card at `--zoom: 1.0` is a near-twin of its source — barely worth the ink. **Reach for ≥ ~1.5× read (i.e. `--zoom` ≥ ~1.2).**
+- **How big the card READS vs the on-screen original** = `--zoom ÷ --screen-scale` (with the shipped scales: ≈ `--zoom × 1.21` on iPhone, `× 1.24` on iPad). This is what makes a breakout feel deliberate, and it does **not** depend on the crop size: `--zoom: 1.0` reads only **~1.2×**, `1.2` reads **~1.5×**, `1.5` reads **~1.9×**. So a card at `--zoom: 1.0` is a near-twin of its source — barely worth the ink. **Reach for ≥ ~1.5× read (i.e. `--zoom` ≥ ~1.2).**
 - **How WIDE the card lands on the canvas** = `--crop-w × --zoom`. This is what the crop size controls, and it is the real constraint: a near-full-width panel (~1250 raw px on the 1290px iPhone raw; ~2000 on iPad) can't go past `--zoom` ~1.0 without the card overflowing its canvas. **That is why sub-block crops exist** — they buy zoom headroom. On iPhone a ~600px sub-block can take `--zoom: 1.5` (a ~900px card on the 1290px canvas); on iPad a ~1200px sub-block can do the same; a badge-sized crop can take 3×+ on either device.
 
-`--zoom` above ~1 upscales real pixels, so **softness is the ceiling, not a fixed number** — the 1:1 QA Read is the judge. Clean UI raster (flat shapes, badges, big numerals) holds up well past 1.5×; dense small text softens early. If the magnified text looks mushy: tighten the sub-block (buys zoom without extra width), back off `--zoom`, or use the opt-in genai hero path (`references/genai-pieces.md`). If a full-width panel is the only thing that reinforces the headline, accept the ~1.24× read or drop the breakout — don't fake drama the pixels can't pay for.
+`--zoom` above ~1 upscales real pixels, so **softness is the ceiling, not a fixed number** — the 1:1 QA Read is the judge. Clean UI raster (flat shapes, badges, big numerals) holds up well past 1.5×; dense small text softens early. If the magnified text looks mushy: tighten the sub-block (buys zoom without extra width), back off `--zoom`, or use the opt-in genai hero path (`references/genai-pieces.md`). If a full-width panel is the only thing that reinforces the headline, accept the modest ~1.2× read or drop the breakout — don't fake drama the pixels can't pay for.
 
 ### Render + QA loop
 
@@ -508,6 +510,7 @@ After each screenshot is rendered and approved (not just at the end), update the
 Once ALL screenshots in the set are approved and saved to `final/`, generate a showcase image that displays the final screenshots side-by-side with an optional link. `showcase.py` accepts any number of screenshots — pass ALL finals via a glob. Use the showcase.py script in the skill directory:
 
 ```bash
+# SKILL_DIR = the base directory shown at skill load; the path below is only the fallback
 SKILL_DIR="$HOME/.claude/skills/aso-appstore-screenshots"
 
 uv run "$SKILL_DIR/showcase.py" \

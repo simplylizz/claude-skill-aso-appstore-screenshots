@@ -103,6 +103,7 @@ Design source and finals are saved under `screenshots/` in your project:
 screenshots/
   design/                     ← per-app design system + pages (diffable, re-renderable)
     set.css                   ← the set's shared design system (colours, type scale, frame)
+    ready.js                  ← vendored copy of the shared fail-closed readiness gate
     01-benefit-slug.html      ← one page per benefit
     02-benefit-slug.html
     raw/                      ← vendored simulator raws, kebab-case (pages point here)
@@ -115,9 +116,11 @@ screenshots/
 
   # Only if you opt into the iPad extension:
   design/ipad/                ← iPad design system (its own set.css + iPad frame variant)
-    set.css
-    assets/
+    set.css                   ← @font-face urls point at ../assets/ — fonts are NOT re-vendored
+    ready.js                  ← the readiness gate, copied next to this set.css
     01-benefit-slug.html
+    raw/                      ← vendored iPad raws
+    preview/                  ← disposable iPad working renders
   final/ipad/                 ← approved iPad screenshots, ready to upload
     01-benefit-slug.png
   showcase-ipad.png           ← iPad showcase
@@ -138,7 +141,8 @@ Finals are PNGs at exactly the target Apple dimensions (iPhone default 1290×279
 | `SKILL.md` | The skill prompt — defines the multi-phase workflow (iPhone, then optional iPad / localization) |
 | `references/ipad-extension.md` | The opt-in iPad phase, loaded by SKILL.md after the iPhone set is approved |
 | `references/localization.md` | The opt-in localization phase, loaded by SKILL.md after a device's English set is approved |
-| `assets/html/` | The shipped base template: `base.css` (design system), `iphone.html` / `ipad.html` (example pages), placeholder raws, and a `README.md` documenting the slots, custom properties, and render sequence |
+| `references/genai-pieces.md` | The opt-in genai-piece flow (backend resolution, `enhance.py`/`cutout.py` invocations, compositing), loaded only when the user requests a piece |
+| `assets/html/` | The shipped base template: `base.css` (design system), `ready.js` (the shared fail-closed readiness gate), `iphone.html` / `ipad.html` (example pages), placeholder raws, and a `README.md` documenting the slots, custom properties, and render sequence |
 | `assets/fonts/` | Bundled Inter fonts (SIL OFL) — `InterDisplay-Black.otf` for headlines (loaded via `@font-face`, vendored per project) and `Inter-Regular.otf` for the showcase URL |
 | `showcase.py` | Generates the side-by-side showcase image from all finals (self-contained; works for iPhone or iPad) |
 | `enhance.py` | Optional per-piece image-generation wrapper (`google-genai` SDK or the OpenAI `codex` CLI) — used only for isolated genai pieces, never the full canvas |

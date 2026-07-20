@@ -37,7 +37,15 @@ Throughout, `SKILL_DIR` is the skill's base directory — the path shown when th
      ```
      `cutout.py`'s real flags are `--input`, `--color` (hex, 3- or 6-digit), `--tolerance`, `--feather`, `--output`. Both `--tolerance` and `--feather` are in **Euclidean-RGB distance units** (0..~441): pixels within `--tolerance` of `--color` go fully transparent, and a `--feather` band just above tolerance ramps alpha for a soft edge. The defaults (tolerance 30, feather 4) are a reasonable start — widen `--tolerance` if a plate still shows (the script warns when the key never fully matched, or only grazed the feather band), but not so far it bites the subject. The default `--feather 4` gives a near-hard edge on a high-contrast subject/background boundary; bump `--feather` (e.g. 20-60) for a softer, more blended edge.
    - **Or frame it intentionally** — display the rectangle inside a visible rounded card with a shadow, making the plate a design element.
-4. Re-render the page and run the QA loop. The artifact is now one small, rejectable element — if it's bad, drop it; the rest of the screenshot is untouched.
+
+   **When the piece IS the breakout (the hero-breakout case), give the `<img>` `class="piece"`:**
+   ```html
+   <div class="breakout" style="--crop-x: …; --crop-y: …; --crop-w: …; --crop-h: …; --zoom: …;">
+     <img class="piece" src="assets/piece.png" alt="">
+   </div>
+   ```
+   The crop vars still describe the panel's location **in the raw** — they drive the card window's size and auto-occluding placement exactly as for a CSS crop — but `img.piece` opts the image out of the raw-offset sizing math (a piece has its own dimensions, not the raw's) and fills the window edge to edge via `object-fit: cover` (rule in `set.css`; ready.js likewise exempts an own-src piece from the `--raw-w` check). Since the raster is freshly generated rather than magnified, `--zoom` is bounded by coverage and canvas width only — softness is no longer the ceiling.
+4. Re-render the page and run the QA loop. The artifact is now one small, rejectable element — if it's bad, drop it; the rest of the screenshot is untouched. **Known failure shape:** a hero-breakout piece rendering as a mis-scaled smear of itself (mostly outside the card window) means the `<img>` is missing `class="piece"` — without it the raw-offset sizing math applies to an image that isn't the raw.
 
 ## Failure handling
 

@@ -123,7 +123,7 @@ body.iphone {
 
   --verb-size: 176px;
   --desc-size: 84px;
-  --head-top: 152px;        /* gap from canvas top to the headline */
+  --head-top: 168px;        /* gap from canvas top to the headline (≥6% of canvas height, matching the text edge-margin invariant) */
   --device-gap: 180px;      /* gap from headline to the device */
 
   --bezel: 26px;            /* bezel thickness (uniform) */
@@ -353,6 +353,19 @@ body.ipad .device::after {
   height: auto;
   left: calc(var(--crop-x) * var(--zoom) * -1);
   top: calc(var(--crop-y) * var(--zoom) * -1);
+}
+/* A genai piece (its own src, not a copy of the raw) is NOT laid out by the
+   raw-offset math above — it is a standalone rendering of the panel, so it
+   fills the card window edge to edge. The crop vars still drive the window's
+   size and (auto-occluding) placement; `cover` absorbs the small aspect
+   mismatch between the piece and the crop box. ready.js exempts an own-src
+   piece from the --raw-w check for the same reason. */
+.breakout img.piece {
+  width: 100%;
+  height: 100%;
+  left: 0;
+  top: 0;
+  object-fit: cover;
 }
 
 /* ============================================================================

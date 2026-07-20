@@ -23,6 +23,11 @@
 
    On any failure it adds body.render-error and records a semicolon-joined
    cause in data-render-error instead — a broken asset never passes silently.
+   The gate is deliberately ONE-SHOT: it runs once (after fonts.ready and the
+   image decodes) and the verdict is final for that page load. Pages are
+   static per render, so nothing legitimately changes afterwards; a resource
+   arriving late can only turn a fail into a false FAIL (the safe direction) —
+   re-open the page to re-run the gate.
    set.css additionally paints a full-canvas NOT-READY banner until body.ready
    exists, so a screenshot captured without waiting on the gate (e.g. the
    timer-based fallback renderer) is unmissable in QA.
@@ -44,14 +49,16 @@
   // placement are silently wrong. A breakout <img> is checked only when it
   // shows the SAME raw as a screen (the CSS-crop case, whose offset math
   // assumes --raw-w); a genai piece composited with its own src is exempt —
-  // it is sized by its own CSS, not the raw-offset math.
+  // it is sized by the `.breakout img.piece` rule, not the raw-offset math.
+  // Same-raw detection compares RESOLVED URLs (img.src), so `raw/x.png` and
+  // `./raw/x.png` spellings of one file can't dodge the check.
   const rawW = Math.round(parseFloat(bodyStyle.getPropertyValue("--raw-w")) || 0);
   if (rawW) {
     const screens = [...document.querySelectorAll("img.screen")];
-    const screenSrcs = new Set(screens.map((s) => s.getAttribute("src")));
+    const screenSrcs = new Set(screens.map((s) => s.src));
     const rawCopies = screens.concat(
       [...document.querySelectorAll(".breakout img")].filter((img) =>
-        screenSrcs.has(img.getAttribute("src"))));
+        screenSrcs.has(img.src)));
     for (const img of rawCopies) {
       if (img.naturalWidth > 0 && img.naturalWidth !== rawW)
         fails.push("raw width " + img.naturalWidth + "px != --raw-w " + rawW +

@@ -27,7 +27,11 @@ Each page is a tiny, fixed skeleton. Only three things change per shot:
    PNG for this shot.
 3. **Breakout** (optional) — `<div class="breakout" style="--crop-…">` wrapping
    an `<img>` of the *same* raw. It nests **inside `.device`** (right after
-   `<img class="screen">`) so it can position against the device frame. It is a
+   `<img class="screen">`) so it can position against the device frame.
+   (Opt-in genai hero variant: the wrapped image is a generated piece with its
+   own src and `class="piece"` — the `img.piece` rule fills the card window via
+   `object-fit: cover` instead of the raw-offset math; the crop vars still
+   drive the window's size and placement. See `references/genai-pieces.md`.) It is a
    *magnified copy* of a panel that must **fully cover (occlude) its source** —
    never sit beside the still-visible original (that reads as duplication).
    Placement is **automatic**: the card centres itself over the exact spot its

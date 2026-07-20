@@ -122,6 +122,7 @@ mkdir -p screenshots/final/ipad
 After ALL iPad screenshots are approved, generate an iPad showcase image. The same `showcase.py` script is kept (it accepts any number of screenshots) — point it at ALL the iPad finals:
 
 ```bash
+# SKILL_DIR = the base directory shown at skill load (see top of this file); below is the fallback
 SKILL_DIR="$HOME/.claude/skills/aso-appstore-screenshots"
 uv run "$SKILL_DIR/showcase.py" \
   --screenshots screenshots/final/ipad/*.png \
