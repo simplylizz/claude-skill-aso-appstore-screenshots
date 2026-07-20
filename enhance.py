@@ -10,8 +10,9 @@
 Nano Banana Pro image-edit wrapper for the aso-appstore-screenshots skill.
 
 Replaces the previous dependency on the gemini-mcp MCP server with a direct
-google-genai SDK call. Accepts one or more reference images plus an edit
-prompt, returns a single enhanced image.
+google-genai SDK call. Accepts zero or more reference images plus an edit
+prompt, returns a single enhanced image. With no --image the prompt alone
+drives a from-scratch generation (a decorative piece the user wants invented).
 
 Backends:
   --backend gemini (default)  Calls Google's Nano Banana Pro via the google-genai
@@ -25,14 +26,17 @@ Backends:
 Usage:
   uv run enhance.py \
     --prompt-file prompt.txt \
-    --image screenshots/01-foo/scaffold.png \
-    --aspect-ratio 9:16 \
-    --output screenshots/01-foo/v1.jpg
+    --image reference.png \
+    --output piece-raw.png
+
+  Opt-in per-piece generation: isolate the piece against a flat, known
+  background colour so it can be cut out later. No --aspect-ratio needed.
 
 Flags:
   --prompt / --prompt-file  The edit prompt (one of the two).
-  --image                   Reference image path; repeatable, order preserved
-                            (matches "FIRST image" / "SECOND image" in prompts).
+  --image                   Reference image path; optional and repeatable, order
+                            preserved (matches "FIRST image" / "SECOND image" in
+                            prompts). Omit entirely for prompt-only generation.
   --output                  Where to write the result (required). The output
                             file extension decides the saved format.
   --aspect-ratio            Optional aspect-ratio preset for the gemini backend
@@ -115,9 +119,21 @@ def load_prompt(args: argparse.Namespace) -> str:
 
 
 def validate_image_paths(paths: list[str]) -> list[Path]:
-    """Validate every --image path exists and is a readable image; return Paths."""
+    """Validate every --image path exists and is a readable image; return Paths.
+
+    Zero images is valid: a prompt-only run invents a piece from scratch (both
+    backends accept an empty reference list). That mode is announced loudly on
+    stderr so an accidentally-dropped --image (e.g. on the hero-breakout path,
+    which must re-render a panel FROM a reference raw) can't silently produce
+    invented UI that resembles nothing in the app.
+    """
     if not paths:
-        die("at least one --image is required")
+        print(
+            "enhance: note: no --image supplied — generating from the prompt "
+            "alone. If this piece should be based on an app screenshot (e.g. a "
+            "hero-breakout panel), re-run with --image <reference>.",
+            file=sys.stderr,
+        )
     resolved: list[Path] = []
     for p in paths:
         path = Path(p)
@@ -183,14 +199,13 @@ def is_retryable(exc: Exception) -> bool:
 
 def save_image_bytes(image_bytes: bytes, output: Path) -> None:
     """Decode returned bytes with Pillow and save in the format implied by the
-    output extension. Falls back to writing raw bytes if Pillow can't parse."""
+    output extension. Fails closed if the bytes can't be decoded or saved — an
+    invalid image must never reach the design assets."""
     try:
         img = Image.open(io.BytesIO(image_bytes))
         img.load()
     except Exception as e:
-        warn(f"could not decode returned image with Pillow ({e}); writing raw bytes to {output}")
-        output.write_bytes(image_bytes)
-        return
+        die(f"model returned bytes Pillow could not decode ({e}); output NOT written to {output}")
 
     ext = output.suffix.lower().lstrip(".")
     save_format = EXT_TO_FORMAT.get(ext) or (img.format or "PNG")
@@ -199,8 +214,12 @@ def save_image_bytes(image_bytes: bytes, output: Path) -> None:
     try:
         img.save(output, format=save_format)
     except Exception as e:
-        warn(f"Pillow could not save as {save_format} ({e}); writing raw bytes to {output}")
-        output.write_bytes(image_bytes)
+        # Clean up any partial file so a truncated image can't be mistaken for success.
+        try:
+            output.unlink(missing_ok=True)
+        except OSError:
+            pass
+        die(f"Pillow could not save the returned image as {save_format} ({e}); output NOT written to {output}")
 
 
 def generate_with_retry(client, model: str, contents: list, config) -> object:
@@ -279,10 +298,14 @@ def run_codex(args: argparse.Namespace, prompt: str, image_paths: list[Path], ou
     abs_out = output.resolve()
     abs_imgs = [str(p.resolve()) for p in image_paths]
 
+    task = (
+        "Using the provided reference image(s), produce a single edited/enhanced image"
+        if abs_imgs
+        else "Produce a single image from the instructions below"
+    )
     instruction_lines = [
         "You have an image generation/editing tool available via your ChatGPT "
-        "subscription (gpt-image). Using the provided reference image(s), produce a "
-        "single edited/enhanced image and SAVE IT AS A FILE to this exact absolute path:",
+        f"subscription (gpt-image). {task} and SAVE IT AS A FILE to this exact absolute path:",
         str(abs_out),
         "",
     ]
@@ -353,7 +376,8 @@ def main() -> None:
         "--image",
         action="append",
         default=[],
-        help="Path to a reference image (repeatable; order is preserved)",
+        help="Path to a reference image (optional, repeatable; order is preserved). "
+        "Omit entirely for prompt-only generation.",
     )
     parser.add_argument("--output", required=True, help="Path to write the enhanced image")
     parser.add_argument(

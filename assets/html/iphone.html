@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<!-- ============================================================================
+     iphone.html — base template for ONE iPhone screenshot (1290x2796).
+     Copy per shot to screenshots/design/0N-<benefit-slug>.html and edit ONLY
+     the marked slots. Sizes/frame/breakout mechanics come from set.css.
+     Render:
+       agent-browser set viewport 1290 2796
+       agent-browser open "file://<abs path>/01-clear-out-duplicates.html"
+       agent-browser wait "body.ready"
+       agent-browser screenshot 01-clear-out-duplicates.png
+     ========================================================================= -->
+<html lang="en">
+<!-- lang: set the locale on localized pages (e.g. lang="ja" / lang="zh-Hans"). -->
+<head>
+  <meta charset="utf-8">
+  <!-- Design system. Runtime copies link "set.css" in the same dir instead. -->
+  <link rel="stylesheet" href="base.css">
+</head>
+<body class="iphone">
+
+  <!-- ===== SLOT: headline ==================================================
+       Verb = the action; descriptor = the object/benefit. Keep the verb short.
+       Do NOT set font-size here — the scale lives in set.css and is uniform
+       across the set. If it overflows, adjust the scale there or reword. -->
+  <div class="headline">
+    <div class="verb">CLEAR OUT</div>
+    <div class="desc">DUPLICATE PHOTOS</div>
+  </div>
+
+  <!-- ===== SLOT: device + screenshot =======================================
+       src -> the raw simulator PNG for this shot. The placeholder below ships
+       with the template; replace it with the captured screenshot.
+       (At runtime raws are vendored at raw/<name>.png relative to the page —
+       URL-safe kebab-case names, never absolute paths to capture locations.)
+
+       The OPTIONAL breakout lives INSIDE .device (after img.screen) so it can
+       auto-position against the device frame — see the breakout slot below. -->
+  <div class="device">
+    <img class="screen" src="placeholder-screen-iphone.png"
+         alt="app screenshot" width="1290" height="2796">
+
+    <!-- ===== SLOT: breakout (OPTIONAL) ======================================
+         A magnified real-pixel copy of a panel from the SAME raw, framed as a
+         floating card. Set the five geometry vars inline (all in RAW screenshot
+         pixels except --zoom, the display scale). How big the card READS is
+         --zoom / --screen-scale: reach for a >= ~1.5x read (--zoom >= ~1.2) via
+         a tight SUB-BLOCK crop — a full-panel crop like this demo can only
+         afford --zoom ~0.9 (its occlusion floor) and reads as a near-twin.
+         Softness is the ceiling: QA judges the magnified text at 1:1.
+         PLACEMENT IS AUTOMATIC: the card centres itself over the exact spot its
+         crop occupies on the device screen (derived from the crop vars +
+         --screen-scale), so it occludes its source. Do NOT hand-place it; nudge
+         only with --shift-x/--shift-y (e.g. recentre a sub-block card over the
+         FULL source panel).
+         MEASURE THE CROP: sample the raw's pixels to find the panel's true
+         bounds, then inset --crop-* 8-12px INSIDE them (any page background left
+         in the crop shows as a stripe inside the card border). If the panel is
+         near-full-screen-width, crop a tight sub-block and magnify THAT.
+         QA the rendered card at 1:1 (full doctrine: SKILL.md Breakout flow).
+         Delete this block when a clean shot reads better. -->
+    <div class="breakout" style="
+          --crop-x: 44px; --crop-y: 496px;
+          --crop-w: 1202px; --crop-h: 396px;
+          --zoom: 0.9;">
+      <img src="placeholder-screen-iphone.png" alt="">
+    </div>
+  </div>
+
+  <!-- ===== Readiness (do not edit) =========================================
+       FAIL-CLOSED render gate, shared by every page — the driver waits on
+       `body.ready`; ready.js adds it only when everything a correct render
+       needs is present (fonts, decoded images, the --raw-w contract, the
+       headline face incl. CJK, resolved stylesheet + background, headline
+       fit). On any failure it adds `body.render-error` + a `data-render-error`
+       cause instead (readable via agent-browser JS evaluation) — a broken
+       asset never passes silently. At runtime ready.js is vendored next to
+       set.css; keep this relative src (locale pages one dir deeper use
+       ../ready.js, like their ../set.css link). -->
+  <script src="ready.js"></script>
+</body>
+</html>

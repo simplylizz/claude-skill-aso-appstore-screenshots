@@ -1,0 +1,390 @@
+/* ============================================================================
+   base.css — App Store screenshot design system (SHIPPED BASE TEMPLATE)
+   ----------------------------------------------------------------------------
+   The skill copies + adapts this file into a user's project as
+   screenshots/design/set.css (the per-app design system). Every knob you would
+   tune for a specific app is a CSS custom property here, so adaptation is
+   mostly editing the variable blocks — not rewriting rules.
+
+   WHAT LIVES WHERE
+     - Colours, type scale, frame geometry, breakout geometry .... custom props
+     - Layout / compositing rules ............................... the rules below
+     - Per-shot HTML ............................................ headline text,
+       screenshot <img src>, and (optionally) one breakout block. Never sizes.
+
+   INVARIANTS enforced here (canonical doctrine + full breakout rules live in
+   SKILL.md's Breakout flow; this list is the summary that travels with the
+   stylesheet):
+     - Canvas is EXACTLY the App Store size (iPhone 1290x2796, iPad 2064x2752).
+     - The type scale (--verb-size / --desc-size) is uniform across the whole
+       set. Do NOT override it per shot — if a headline overflows, adjust the
+       set-wide scale or reword, never add a one-off size.
+     - Headline text keeps >= ~6% padding from every canvas edge.
+     - A breakout is a MAGNIFIED COPY that covers its source (a full-panel card
+       occludes the whole panel; a sub-block card covers its own crop's
+       footprint — the rest of the panel is context, not duplication). It reads
+       --zoom / --screen-scale bigger than the on-screen original: reach for a
+       >= ~1.5x read (--zoom >= ~1.2, usually via a tight sub-block crop);
+       softness is the ceiling, judged in the 1:1 QA read, and dense text
+       rarely survives --zoom past ~1.5.
+     - BREAKOUT PLACEMENT IS AUTO-OCCLUDING, NOT EYEBALLED. The .breakout div
+       lives INSIDE .device (after img.screen) and centres itself over the exact
+       spot its crop occupies on the device screen, computed from the crop vars
+       and --screen-scale. Never hand-place it; nudge only with --shift-x/y.
+     - BREAKOUT CONTAINMENT + MEASURED CROPS + 1:1 QA — the panel choice IS the
+       placement (only fully-on-canvas panels are eligible; the device bleeds
+       off the canvas bottom), crops are measured against the raw's real pixels
+       and inset 8-12px inside the panel bounds, and every breakout is QA'd at
+       native resolution. The formulas and the step-by-step flow are in
+       SKILL.md (Breakout flow) — the .breakout comment below documents only
+       the geometry this file implements.
+   ============================================================================ */
+
+/* ---- Fonts -----------------------------------------------------------------
+   Bundled Inter Display Black. The url is RELATIVE to this stylesheet, so it
+   resolves against the skill's assets/ dir when the base template renders
+   standalone (assets/html/base.css -> ../fonts/InterDisplay-Black.otf).
+   RUNTIME: when this file is copied to screenshots/design/set.css, fonts are
+   vendored into screenshots/design/assets/ and this url is rewritten to point
+   there (e.g. url("assets/InterDisplay-Black.otf")). Heavy CJK webfonts for
+   ja/ko/zh locales are added as extra @font-face blocks the same way.
+--------------------------------------------------------------------------- */
+@font-face {
+  font-family: "Inter Display";
+  src: url("../fonts/InterDisplay-Black.otf") format("opentype");
+  font-weight: 900;
+  font-style: normal;
+  font-display: block; /* block, never swap: the body.ready wait guarantees the
+                          real face is loaded before we ever screenshot */
+}
+
+/* ---- Reset ----------------------------------------------------------------- */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+img { display: block; max-width: 100%; }
+
+/* ============================================================================
+   DESIGN TOKENS
+   Shared defaults live on :root; per-device values live in the body.iphone /
+   body.ipad blocks below. Override the colour + scale tokens per app.
+   ============================================================================ */
+:root {
+  /* Brand */
+  --bg: #4338CA;            /* flat canvas background (App Store thumbnails read
+                               best on a flat fill — keep it flat) */
+  --fg: #ffffff;            /* headline colour */
+
+  /* Headline type */
+  --verb-weight: 900;
+  --desc-weight: 900;
+  --verb-tracking: -0.01em;
+  --desc-tracking: 0.005em;
+  --headline-side-pad: 7%;  /* >= 6% keeps text off the edges at thumbnail size */
+
+  /* Device frame (shared look; sizes are per-device below) */
+  --bezel-color: #0b0b0f;
+  --frame-shadow: 0 55px 110px rgba(0, 0, 0, 0.34);
+  --screen-bg: #f6f7fb;     /* shows only if a screenshot fails to load */
+
+  /* Breakout crop (see .breakout). Geometry is set per shot in the HTML. */
+  --zoom: 1;                /* display scale of raw pixels. The card READS
+                               --zoom / --screen-scale bigger than its on-screen
+                               original — reach for a >= ~1.5x read (--zoom
+                               >= ~1.2, usually via a tight sub-block crop);
+                               softness is the ceiling (QA judges at 1:1). The
+                               card must cover its source — see .breakout. */
+  --crop-x: 0px;            /* crop box origin in RAW screenshot pixels */
+  --crop-y: 0px;
+  --crop-w: 900px;          /* crop box size in RAW screenshot pixels */
+  --crop-h: 360px;
+  /* Placement is DERIVED from the crop vars + --screen-scale (see .breakout);
+     the only manual knobs are --shift-x/--shift-y (default 0px), used to
+     recentre a sub-block card over the FULL source panel. */
+  --breakout-radius: 40px;
+  --breakout-shadow: 0 40px 90px rgba(0, 0, 0, 0.40);
+  --breakout-border: 3px solid rgba(255, 255, 255, 0.85);
+
+  /* Island/camera-dot pill shape — shared by both devices. */
+  --island-radius: 999px;
+}
+
+/* Derived per-element from the device block's --raw-w / --screen-scale /
+   --bezel, so declaring it ONCE here serves both devices — and a frame resize
+   (via --screen-scale) can never desync breakout placement from the frame. */
+body {
+  --device-w: calc(var(--raw-w) * var(--screen-scale) + 2 * var(--bezel));
+}
+
+/* ---------------------------------------------------------------------------
+   iPhone variant — canvas 1290 x 2796, screen aspect 1290/2796 (~0.461)
+--------------------------------------------------------------------------- */
+body.iphone {
+  --canvas-w: 1290px;
+  --canvas-h: 2796px;
+
+  --verb-size: 176px;
+  --desc-size: 84px;
+  --head-top: 152px;        /* gap from canvas top to the headline */
+  --device-gap: 180px;      /* gap from headline to the device */
+
+  --bezel: 26px;            /* bezel thickness (uniform) */
+  --frame-radius: 122px;    /* outer corner radius */
+  --screen-radius: 96px;    /* inner (screen) corner radius */
+  /* CONTRACT: --raw-w MUST equal the actual pixel width of the raw simulator
+     PNG, and every raw in the set must share identical dimensions. If the raws
+     are a different (uniform) size than the canvas-native capture (e.g.
+     1179x2556 instead of 1290x2796), keep the intended device size by
+     recomputing --screen-scale = intended on-canvas screen width / raw width
+     (all breakout crop coords are in that raw's real pixels). */
+  --raw-w: 1290px;          /* native width of the simulator raw PNG */
+
+  /* HOW BIG THE DEVICE SITS ON THE CANVAS — this is the knob you tune.
+     It is the ratio of on-canvas screen px to raw px, and breakout placement
+     is derived from it, so --device-w is computed FROM it rather than the
+     other way round: editing one number keeps the frame and every breakout in
+     agreement by construction. 0.8279070 -> a 1120px frame, sized so the tall
+     device bleeds off the canvas bottom while side margins stay comfortable.
+     Raising it enlarges the device (and bleeds more off the bottom).
+     (Carried to 7dp so the derived width lands on a whole pixel; a coarser
+     value shifts the frame a few thousandths of a px and only perturbs
+     antialiasing — harmless, but there is no reason to invite it.)
+     --device-w is derived from this in the shared body rule above. */
+  --screen-scale: 0.8279070;
+
+  /* Dynamic Island */
+  --island-w: 250px;
+  --island-h: 74px;
+  --island-top: calc(var(--bezel) + 26px);
+}
+
+/* ---------------------------------------------------------------------------
+   iPad variant — canvas 2064 x 2752, screen aspect 2064/2752 (0.750)
+   Thin uniform bezels, a small front-camera dot instead of a Dynamic Island.
+--------------------------------------------------------------------------- */
+body.ipad {
+  --canvas-w: 2064px;
+  --canvas-h: 2752px;
+
+  --verb-size: 236px;
+  --desc-size: 108px;
+  --head-top: 168px;
+  --device-gap: 140px;
+
+  --bezel: 30px;
+  --frame-radius: 92px;
+  --screen-radius: 60px;
+  /* CONTRACT (see iphone block): --raw-w == the raw PNG's real pixel width; all
+     raws in a set share identical dimensions; if the raws differ (uniformly)
+     from the native 2064-wide capture, recompute
+     --screen-scale = intended on-canvas screen width / raw width. */
+  --raw-w: 2064px;
+
+  /* The device-size knob — see the iphone block. 0.8042636 -> a 1720px frame,
+     sized so the device bleeds off the canvas bottom. --device-w is derived
+     (shared body rule above), so breakout placement can never drift out of
+     sync with the frame. */
+  --screen-scale: 0.8042636;
+
+  /* front-camera dot (reuses the island pseudo-element as a small circle) */
+  --island-w: 16px;
+  --island-h: 16px;
+  --island-top: calc(var(--bezel) + 15px);
+
+  --breakout-radius: 34px;
+}
+
+/* ============================================================================
+   CANVAS + LAYOUT
+   ============================================================================ */
+html {
+  /* The viewport IS the canvas size, so 100% is exact. The --canvas-* vars are
+     defined on body.iphone/body.ipad and do NOT inherit upward, so sizing html
+     with them would resolve to `auto`; size only body with the vars below. */
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+body {
+  width: var(--canvas-w);
+  height: var(--canvas-h);
+  overflow: hidden;
+  position: relative;          /* headline/device stacking context */
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Inter Display", -apple-system, "SF Pro Display", sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ---- Headline -------------------------------------------------------------- */
+.headline {
+  flex: none;              /* fixed-height flex column: never shrink/grow */
+  width: 100%;
+  padding: 0 var(--headline-side-pad);
+  margin-top: var(--head-top);
+  text-align: center;
+  color: var(--fg);
+}
+.verb {
+  font-size: var(--verb-size);
+  font-weight: var(--verb-weight);
+  letter-spacing: var(--verb-tracking);
+  line-height: 0.94;
+  text-wrap: balance;      /* even multi-word verbs */
+}
+.desc {
+  font-size: var(--desc-size);
+  font-weight: var(--desc-weight);
+  letter-spacing: var(--desc-tracking);
+  line-height: 1.04;
+  margin-top: 0.18em;
+  text-wrap: balance;
+}
+
+/* ============================================================================
+   DEVICE FRAME (fully CSS-drawn; markup is just .device > img.screen)
+   ============================================================================ */
+.device {
+  flex: none;              /* must not shrink — it deliberately overflows the
+                              canvas bottom (the bleed effect) */
+  position: relative;
+  margin-top: var(--device-gap);
+  width: var(--device-w);
+  padding: var(--bezel);
+  background: var(--bezel-color);
+  border-radius: var(--frame-radius);
+  box-shadow: var(--frame-shadow);
+}
+.screen {
+  /* The raw is captured at the exact App Store aspect, so height:auto shows the
+     WHOLE screenshot with no crop and lets the frame height follow the image.
+     (If a raw has a different aspect, add object-fit:cover + a fixed
+     aspect-ratio to letterbox-free crop it — not needed for real captures.) */
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--screen-radius);
+  background: var(--screen-bg);
+}
+/* Dynamic Island (iPhone) / front-camera dot (iPad) — same pseudo-element,
+   sized by the per-device --island-* tokens. */
+.device::after {
+  content: "";
+  position: absolute;
+  top: var(--island-top);
+  left: 50%;
+  transform: translateX(-50%);
+  width: var(--island-w);
+  height: var(--island-h);
+  background: #000;
+  border-radius: var(--island-radius);
+  z-index: 2;
+}
+/* iPad camera dot gets a faint rim so it reads as a lens, not a blob */
+body.ipad .device::after {
+  background: #050506;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.06);
+}
+
+/* ============================================================================
+   BREAKOUT — a real-pixel crop of the raw screenshot, framed as a card.
+   ----------------------------------------------------------------------------
+   Markup:  the .breakout div lives INSIDE .device, after img.screen:
+     <div class="device">
+       <img class="screen" src="<raw>.png">
+       <div class="breakout" style="--crop-x: …; --crop-y: …;
+                                     --crop-w: …; --crop-h: …; --zoom: …;">
+         <img src="<same raw>.png" alt="">
+       </div>
+     </div>
+   The container is a window of size (--crop-w x --crop-h) RAW pixels scaled by
+   --zoom; the inner <img> is the WHOLE raw rendered at (--raw-w * --zoom) and
+   shifted by the crop origin so only the chosen panel shows. Set the five
+   geometry vars per shot in the page (inline style on .breakout is fine).
+
+   A breakout is a MAGNIFIED COPY of a real panel. The GEOMETRY this file
+   implements (the rules below are the contract for the calc() in .breakout):
+     - AUTO-OCCLUSION: the card centres itself over the exact spot its crop
+       occupies on the device screen — placement is DERIVED from the crop vars +
+       --screen-scale, not hand-tuned. Nudge ONLY with --shift-x/--shift-y.
+       The card's centre and outer box (content-box: window + border, +/-3px
+       per edge):
+         card_cx = device_left + --bezel + (--crop-x + --crop-w/2) * --screen-scale + --shift-x
+         card_cy = device_top  + --bezel + (--crop-y + --crop-h/2) * --screen-scale + --shift-y
+         card box = (card_cx +/- (--crop-w * --zoom / 2 + border),
+                     card_cy +/- (--crop-h * --zoom / 2 + border))
+     - READ RATIO: the card reads --zoom / --screen-scale bigger than its
+       on-screen original. Reach for a >= ~1.5x read (--zoom >= ~1.2), usually
+       via a tight sub-block crop; softness is the ceiling (1:1 QA judges).
+   The full doctrine — coverage floors (a full-panel crop inset i inside a
+   panel of raw size P needs --zoom >= --screen-scale * P/(P - 2i); a
+   sub-block card needs --zoom >= --screen-scale for its own footprint),
+   shift bounds, panel-eligibility/containment ladder, measured-crop rule,
+   and the 1:1 QA recipe — is canonical in SKILL.md's Breakout flow.
+   ============================================================================ */
+.breakout {
+  position: absolute;
+  /* AUTO-OCCLUSION: the card centres itself over the exact spot where its
+     crop appears on the device screen — placement is derived, not eyeballed.
+     Nudge only with --shift-x/--shift-y (e.g. recentre a sub-block card
+     over the FULL source panel). */
+  left: calc(var(--bezel) + (var(--crop-x) + var(--crop-w) / 2) * var(--screen-scale) + var(--shift-x, 0px));
+  top:  calc(var(--bezel) + (var(--crop-y) + var(--crop-h) / 2) * var(--screen-scale) + var(--shift-y, 0px));
+  transform: translate(-50%, -50%);
+  /* content-box (overriding the reset's border-box) so the visible crop window
+     is EXACTLY --crop-w*--zoom by --crop-h*--zoom; the border sits OUTSIDE it,
+     making the card's outer box the window + 2x the border (+/-3px per edge). */
+  box-sizing: content-box;
+  width:  calc(var(--crop-w) * var(--zoom));
+  height: calc(var(--crop-h) * var(--zoom));
+  overflow: hidden;
+  border-radius: var(--breakout-radius);
+  box-shadow: var(--breakout-shadow);
+  border: var(--breakout-border);
+  background: var(--screen-bg);
+  z-index: 3;
+}
+.breakout img {
+  position: absolute;
+  max-width: none;                                   /* override reset */
+  width: calc(var(--raw-w) * var(--zoom));
+  height: auto;
+  left: calc(var(--crop-x) * var(--zoom) * -1);
+  top: calc(var(--crop-y) * var(--zoom) * -1);
+}
+
+/* ============================================================================
+   READINESS — FAIL-CLOSED. The shared ready.js adds .ready ONLY when every
+   check passes (fonts, decoded images, --raw-w contract, headline face incl.
+   CJK, resolved stylesheet + background, headline fit); any failure instead
+   adds .render-error and records the cause in body[data-render-error].
+   `agent-browser wait "body.ready"` hooks on the class.
+
+   The banner below keeps even a TIMER-BASED capture fail-closed: until
+   body.ready exists, the whole canvas is covered by an unmissable magenta
+   NOT-READY overlay (with the failure reason once ready.js recorded one). The
+   normal render path never sees it — the wait gates the screenshot — but the
+   plain-headless-Chrome fallback (SKILL.md, Failure handling) captures on a
+   virtual-time budget, and a too-early or failed capture must scream in the
+   QA Read rather than pass as a plausible-looking page.
+   ============================================================================ */
+body:not(.ready)::before {
+  content: "RENDER NOT READY \A" attr(data-render-error);
+  white-space: pre-wrap;
+  word-break: break-word;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 8%;
+  background: #FF00FF;
+  color: #000;
+  font: 900 64px/1.35 monospace;
+}
+body.ready         { /* all assets verified — safe to screenshot */ }
+body.render-error  { /* a required asset failed; cause is in data-render-error */ }

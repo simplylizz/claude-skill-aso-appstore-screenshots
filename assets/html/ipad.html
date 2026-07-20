@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<!-- ============================================================================
+     ipad.html — base template for ONE iPad screenshot (2064x2752).
+     Same structure as iphone.html; only the body class (.ipad) and viewport
+     differ. Reuses the set's design language via set.css.
+     Render:
+       agent-browser set viewport 2064 2752
+       agent-browser open "file://<abs path>/01-free-up-space.html"
+       agent-browser wait "body.ready"
+       agent-browser screenshot 01-free-up-space.png
+     ========================================================================= -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="base.css">
+</head>
+<body class="ipad">
+
+  <!-- ===== SLOT: headline (uniform scale from set.css; do not size here) -->
+  <div class="headline">
+    <div class="verb">FREE UP</div>
+    <div class="desc">GIGABYTES OF SPACE</div>
+  </div>
+
+  <!-- ===== SLOT: device + screenshot (replace src with the iPad raw).
+       The OPTIONAL breakout lives INSIDE .device (after img.screen). -->
+  <div class="device">
+    <img class="screen" src="placeholder-screen-ipad.png"
+         alt="app screenshot" width="2064" height="2752">
+
+    <!-- ===== SLOT: breakout (OPTIONAL) — magnified RAW-pixel copy of a panel.
+         Placement is AUTOMATIC (derived from the crop vars + --screen-scale),
+         so the card auto-occludes its source; nudge only with --shift-x/--shift-y.
+         MEASURE the crop (sample the raw, inset 8-12px inside the panel's true
+         bounds). If the panel is near-full-width, crop a tight sub-block and
+         magnify THAT — the card reads --zoom / --screen-scale bigger than its
+         on-screen original, so reach for a >= ~1.5x read (--zoom >= ~1.2); this
+         demo's full-panel crop at --zoom 0.86 sits at its occlusion floor and
+         reads as a near-twin. Softness is the ceiling (QA at 1:1 judges).
+         See iphone.html + SKILL.md's Breakout flow. -->
+    <div class="breakout" style="
+          --crop-x: 78px; --crop-y: 706px;
+          --crop-w: 1908px; --crop-h: 372px;
+          --zoom: 0.86;">
+      <img src="placeholder-screen-ipad.png" alt="">
+    </div>
+  </div>
+
+  <!-- ===== Readiness (do not edit) — FAIL-CLOSED render gate, shared via
+       ready.js (see iphone.html for the full commentary). Adds body.ready only
+       when every check passes; otherwise body.render-error + data-render-error
+       names the cause. Keep the relative src; locale pages one dir deeper use
+       ../ready.js. -->
+  <script src="ready.js"></script>
+</body>
+</html>

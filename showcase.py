@@ -14,10 +14,16 @@ number of screenshots (the pipeline passes all finals, typically 3-5).
 
 import argparse
 import os
+import sys
 
 from PIL import Image, ImageDraw, ImageFont
 
-from compose_common import die
+
+def die(msg):
+    """Print a one-line error prefixed with the script name, then exit 1."""
+    prog = os.path.basename(sys.argv[0]) or "showcase"
+    print(f"{prog}: {msg}", file=sys.stderr)
+    sys.exit(1)
 
 # ── Layout ──────────────────────────────────────────────────────────
 PADDING = 60
@@ -46,14 +52,38 @@ def create_showcase(screenshots, output_path, github_url=None):
     for p in screenshots:
         if not os.path.isfile(p):
             die(f"screenshot not found: {p}")
-    images = [Image.open(p).convert("RGBA") for p in screenshots]
 
-    # Scale all to same height
+    # Scale all to the same height. Open each handle inside a context manager so
+    # it is closed once we hold the independent scaled copy. Resize BEFORE the
+    # RGBA conversion so the conversion touches ~800px copies, not the full-res
+    # finals (converting first allocates a throwaway full-res RGBA per shot).
     target_h = 800
     scaled = []
-    for img in images:
-        ratio = target_h / img.height
-        scaled.append(img.resize((int(img.width * ratio), target_h), Image.LANCZOS))
+    aspects = []  # (path, width/height) for the mixed-input check
+    for p in screenshots:
+        with Image.open(p) as src:
+            frame = src if src.mode in ("RGB", "RGBA") else src.convert("RGBA")
+            aspects.append((p, frame.width / frame.height))
+            ratio = target_h / frame.height
+            scaled.append(
+                frame.resize(
+                    (int(frame.width * ratio), target_h), Image.LANCZOS
+                ).convert("RGBA")
+            )
+
+    # All inputs are scaled to one height, so mixing device classes/orientations
+    # composes a lopsided showcase. Warn (don't abort) if any two aspect ratios
+    # differ by more than ~2% — the user may want a mixed preview.
+    if aspects:
+        ref_path, ref_ratio = aspects[0]
+        odd = [p for p, r in aspects if abs(r - ref_ratio) / ref_ratio > 0.02]
+        if odd:
+            print(
+                f"showcase: warning: mixed aspect ratios — {', '.join(odd)} "
+                f"differ from {ref_path} by more than 2%; the showcase may look "
+                "lopsided (mixing iPhone/iPad or portrait/landscape?)",
+                file=sys.stderr,
+            )
 
     # Calculate canvas size
     total_w = sum(s.width for s in scaled) + GAP * (len(scaled) - 1) + PADDING * 2
@@ -82,6 +112,8 @@ def create_showcase(screenshots, output_path, github_url=None):
             anchor="mm",
         )
 
+    out_dir = os.path.dirname(os.path.abspath(output_path))
+    os.makedirs(out_dir, exist_ok=True)
     canvas.save(output_path, "PNG")
     print(f"✓ {output_path} ({total_w}×{total_h})")
 
@@ -92,7 +124,7 @@ def main():
         "--screenshots",
         nargs="+",
         required=True,
-        help="Paths to the final screenshot images (JPG or PNG); pass all finals",
+        help="Paths to the final screenshot images (PNG); pass all finals",
     )
     p.add_argument("--output", required=True, help="Output file path")
     p.add_argument("--github", default=None, help="GitHub URL to display at bottom")
