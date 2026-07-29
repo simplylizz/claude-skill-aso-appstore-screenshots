@@ -119,14 +119,54 @@ the headline font face actually loaded (checked against the `.verb` element's
 computed family, so a swapped CJK face is verified too — and a CJK headline
 still resolving to the Latin face fails), the stylesheet applied (`--canvas-w`
 non-empty), the body background resolved to a real colour (a malformed `--bg`
-would silently render transparent), and the headline fits its box (no
-`overflow:hidden` clipping). If any check fails it adds `body.render-error` and
+would silently render transparent), the headline fits its box (no
+`overflow:hidden` clipping), and **no headline glyph collides with the line
+beneath it** (see below). If any check fails it adds `body.render-error` and
 writes a semicolon-joined cause to `data-render-error` instead — so a broken
 asset never passes the gate silently. Read the cause with agent-browser's JS
 evaluation when a page stalls without `body.ready`. Additionally, `base.css`
 paints a full-canvas magenta **NOT-READY banner** until `body.ready` exists, so
 even a capture that skipped the wait (the timer-based fallback renderer) shows
 an unmissable failure instead of a plausible-looking page.
+
+### The glyph-collision gate (why headline copy can look fine and still be broken)
+
+`.verb` runs `line-height: 0.94` — deliberately tight, because the headline is
+all-caps and normal descenders (g, j, p, q, y) never appear. But a **capital
+carrying a below-baseline mark** does: `Ț Ș Ą Ę Ç Ģ Ķ Ļ Ņ Ŗ`, i.e. comma-below,
+cedilla and ogonek. Those ink roughly `0.23em` under the baseline while the
+tight line box bottoms out around `0.10em`, so the mark escapes its own box and
+lands on the glyphs of the line beneath.
+
+**No geometric check catches this.** Nothing overflows and nothing clips — the
+lines merely overlap — so the width gate, the `--head-block-h` gate and a
+full-canvas QA Read at typical downscale all stay green. A shipped Romanian set
+dropped the comma of `Ț` in `CURĂȚĂ` between the C and R of `ECRAN` (reading as
+`EĆRAN`) and the comma of `Ș` in `ȘTERGE` inside the P of `POZELE`, across two
+shots and two devices, undetected.
+
+Two things now prevent it:
+
+1. `base.css` gives `.verb` `padding-bottom: 0.06em` of diacritic headroom.
+   **If you change it, change `--head-block-h` by the same amount** — the pin
+   exists so the device sits at the same y on every shot, and the padding is
+   part of the headline block's height.
+2. `ready.js` measures the real inked descent of every word with canvas
+   `TextMetrics.actualBoundingBoxDescent`, per **visual line** (recovered from
+   `Range.getClientRects()`, so wrapped descriptors are checked line by line),
+   against the room actually free below that line's box. Only the last line of
+   an element gets its bottom padding plus the next block's top margin; interior
+   lines butt straight against the line below.
+
+The tolerance is **2px, not 0**, and that is deliberate: a line-final comma
+clears its box by well under a pixel (13.9px of ink vs 13.2px of room for
+`ECRAN,`), which is invisible at this type scale and dominated by
+rasterisation, whereas a real comma-below on a capital overflows by 3–10px.
+A zero tolerance blocks legitimate copy; the 2px band separates the two cleanly.
+
+When the gate fires, **reword first** — a shorter native form is almost always
+the right fix and costs nothing. Raise the padding and the pin together only if
+the copy genuinely has to stand.
 
 ## Runtime adaptation notes
 

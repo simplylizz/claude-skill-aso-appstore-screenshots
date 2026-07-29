@@ -113,6 +113,89 @@
         "px) — shrink the set-wide type scale or reword, never per shot");
   }
 
+
+  // DIACRITIC COLLISION: the headline sits on a deliberately tight line box
+  // (--verb line-height < 1), which neither the width nor the height check
+  // above can police — a capital carrying a below-baseline mark (Ț Ș Ą Ę Ç,
+  // and cedilla / ogonek / comma-below generally) inks PAST its line box and
+  // lands on the glyphs beneath. Nothing overflows; the lines simply overlap,
+  // so every geometric check stays green. A shipped Romanian set dropped the
+  // comma of Ț in "CURĂȚĂ" between the C and R of "ECRAN", and the comma of Ș
+  // in "ȘTERGE" inside the P of "POZELE", with every other gate passing.
+  //
+  // Test: the real inked descent of each word (canvas TextMetrics) against the
+  // room actually free below its line box. Because both --verb and --desc run
+  // line-height near or below 1, the next line's glyphs start essentially at
+  // its box top, so box-bottom IS the collision boundary — measured against
+  // the shipped ro set, this reproduces the observed overlap exactly (40.0px
+  // of ink vs 33.3px of room) where an ink-to-ink model does not.
+  //
+  // TOLERANCE is 2px, not 0: a line-final comma clears its box by well under
+  // a pixel (13.9 vs 13.2 for "ECRAN,"), which is invisible at this type scale
+  // and dominated by rasterisation. Anything a reader can actually see — a
+  // comma-below or cedilla on a capital — overflows by 3-10px.
+  const INK_TOLERANCE_PX = 2;
+  const cx = document.createElement("canvas").getContext("2d");
+  const fontOf = (st) => st.fontWeight + " " + st.fontSize + " " + st.fontFamily;
+
+  // How far below the baseline this style's LINE BOX bottom sits: half-leading
+  // (negative when line-height < content height) plus the font's own descent.
+  function lineBoxDescent(st) {
+    cx.font = fontOf(st);
+    const fm = cx.measureText("Hg");
+    const content = fm.fontBoundingBoxAscent + fm.fontBoundingBoxDescent;
+    return (parseFloat(st.lineHeight) - content) / 2 + fm.fontBoundingBoxDescent;
+  }
+
+  // Group an element's words into visual lines by their client-rect top, so a
+  // wrapped descriptor is checked line by line. Only the LAST line gets the
+  // element's own bottom padding plus the next block's top margin as extra
+  // room; interior lines butt straight up against the line beneath.
+  function visualLines(el) {
+    const node = el.firstChild;
+    if (!node || node.nodeType !== Node.TEXT_NODE) return [];
+    const byTop = new Map();
+    const re = /\S+/g;
+    let m;
+    while ((m = re.exec(node.textContent))) {
+      const r = document.createRange();
+      r.setStart(node, m.index);
+      r.setEnd(node, m.index + m[0].length);
+      const rect = r.getClientRects()[0];
+      if (!rect) continue;
+      const key = Math.round(rect.top);
+      if (!byTop.has(key)) byTop.set(key, []);
+      byTop.get(key).push(m[0]);
+    }
+    return [...byTop.entries()].sort((a, b) => a[0] - b[0]).map((e) => e[1]);
+  }
+
+  for (const el of document.querySelectorAll(".verb, .desc")) {
+    const st = getComputedStyle(el);
+    const boxDescent = lineBoxDescent(st);
+    const lines = visualLines(el);
+    if (!lines.length) continue;
+    let extra = parseFloat(st.paddingBottom) || 0;
+    const next = el.nextElementSibling;
+    // Nothing below inside the headline block (the device is --device-gap
+    // away), so the final line of the final element cannot collide.
+    extra += next ? (parseFloat(getComputedStyle(next).marginTop) || 0) : 1e4;
+    cx.font = fontOf(st);
+    lines.forEach((words, i) => {
+      const room = boxDescent + (i === lines.length - 1 ? extra : 0);
+      for (const w of words) {
+        const ink = cx.measureText(w).actualBoundingBoxDescent;
+        if (ink > room + INK_TOLERANCE_PX)
+          fails.push("headline glyph collision: \"" + w + "\" (." +
+            el.className + ") inks " + ink.toFixed(1) + "px below its baseline " +
+            "but only " + room.toFixed(1) + "px is free — a below-baseline mark " +
+            "lands on the glyphs beneath. Reword to a shorter native form " +
+            "first; if the copy must stand, raise .verb padding-bottom AND " +
+            "--head-block-h by the same amount.");
+      }
+    });
+  }
+
   if (fails.length === 0) {
     document.body.classList.add("ready");
   } else {

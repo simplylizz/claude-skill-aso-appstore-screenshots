@@ -233,6 +233,18 @@ body {
   letter-spacing: var(--verb-tracking);
   line-height: 0.94;
   text-wrap: balance;      /* even multi-word verbs */
+  /* DIACRITIC HEADROOM. line-height < 1 makes the line box shorter than the
+     font's own content box, so its bottom sits only ~0.10em below the
+     baseline while a capital carrying a below-baseline mark (Ț Ș Ą Ę Ç, and
+     cedilla/ogonek/comma-below generally) inks ~0.23em down. Measured on the
+     shipped copy, ro "CURĂȚĂ"/"ȘTERGE" overflowed the gap by 6.7px on iPhone
+     and 9.3px on iPad, dropping the comma of Ț onto the descriptor's cap
+     line; pl "CIESZ SIĘ" and tr "KEYFİNİ ÇIKARIN" grazed it too. This pads
+     the box instead of loosening line-height, so a two-line verb keeps its
+     tight internal leading. Bump --head-block-h by the same amount if you
+     change it, or the device shifts. ready.js measures the real inked
+     descent per visual line and fails the render on any residual collision. */
+  padding-bottom: 0.06em;
 }
 .desc {
   font-size: var(--desc-size);

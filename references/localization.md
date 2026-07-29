@@ -84,6 +84,10 @@ body:lang(de) { --verb-size: 150px; --desc-size: 76px; }
 
 English and every other locale are untouched — only `:lang(de)` pages pick up the smaller scale. The alternative fix is agreeing a tighter wording with the user. **Never** add a per-shot size override — that breaks the "same size on every screenshot" invariant. Get explicit confirmation of the final wording per locale before rendering.
 
+**Below-baseline diacritics are the other length trap, and it is invisible.** Romanian, Polish, Turkish, Latvian and French put comma-below, ogonek and cedilla marks under *capitals* — `Ț Ș Ą Ę Ç Ģ Ķ Ļ Ņ Ŗ` — and the headline is all-caps. Those marks ink well below the baseline, escape `.verb`'s deliberately tight line box, and land on the glyphs of the line beneath. **Nothing overflows and nothing clips**, so the width gate, the `--head-block-h` gate and a downscaled QA Read all pass. A shipped Romanian set put the comma of `Ț` in `CURĂȚĂ` between the C and R of `ECRAN`, and the comma of `Ș` in `ȘTERGE` inside the P of `POZELE`, across two shots and both devices.
+
+`ready.js` now fails the render on this (see `assets/html/README.md` → the glyph-collision gate), so it cannot ship silently. When it fires, **reword to a shorter native form first** — that is nearly always right and costs nothing. Note that verbs are where it bites: a locale whose imperative happens to end in `Ț`/`Ș`/`Ę` is the risky one, so prefer an equally natural verb without a descending capital when the choice is free.
+
 Save the confirmed locale list, raws source, and translation table to memory now (Step 6) so this survives an interruption.
 
 ## Step 4A: Capture Localized Raws (Localized-UI Locales Only)
