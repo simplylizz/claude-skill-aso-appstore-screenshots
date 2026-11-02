@@ -1,6 +1,6 @@
 ---
 name: aso-appstore-screenshots
-description: Use when the user wants App Store / App Store Connect screenshots for their iOS app — creating a new set, redoing benefits or headlines, resuming a previous set, adding an iPad set, or localizing an approved set.
+description: Use when the user wants App Store / App Store Connect screenshots for their iOS app — creating a new set, redoing benefits or headlines, resuming a previous set, adding an iPad or iPhone Duo set, or localizing an approved set.
 user-invocable: true
 ---
 
@@ -23,7 +23,8 @@ Before doing ANY codebase analysis, check the Claude Code memory system for all 
 5. **Image backend** — the user's default backend (`gemini` or `codex`) for optional genai pieces, if one was ever saved. Stored in the generation state file. Rendering itself needs no backend; this line only matters when the user opts into a genai piece (see Optional genai pieces).
 6. **iPhone generation state** — the design directory (`screenshots/design/`), the per-shot HTML file for each benefit, breakout crop notes, render status, and the final PNG paths under `screenshots/final/`.
 7. **iPad state** (optional extension) — iPad raw screenshot paths, pairings, iPad finals. Only present if the user opted into iPad after iPhone was complete.
-8. **Localization state** (optional extension) — target locales, per-locale translation table, raws source per locale (localized simulator raws vs English fallback), per-locale per-screenshot render status. Only present if the user opted into localization.
+8. **iPhone Duo state** (optional extension) — Duo cover raw paths, pairings, Duo finals. Only present if the user opted into iPhone Duo after iPhone was complete.
+9. **Localization state** (optional extension) — target locales, per-locale translation table, raws source per locale (localized simulator raws vs English fallback), per-locale per-screenshot render status. Only present if the user opted into localization.
 
 **Canonical memory filenames** — save and recall each kind of state under these exact names:
 
@@ -33,9 +34,10 @@ Before doing ANY codebase analysis, check the Claude Code memory system for all 
 | iPhone screenshot pairings | `aso_screenshot_pairings.md` |
 | Generation state (incl. brand colour) | `aso_generated_screenshots.md` |
 | iPad pairings | `aso_ipad_pairings.md` |
+| iPhone Duo pairings | `aso_duo_pairings.md` |
 | Localization state | `aso_localization.md` |
 
-Earlier runs may have written app-prefixed variants of these names (e.g. `photobroom_aso_benefits.md`) — when recalling, match those too. When creating new files, use the canonical names above.
+Earlier runs may have written app-prefixed variants of these names (e.g. `myapp_aso_benefits.md`) — when recalling, match those too. When creating new files, use the canonical names above.
 
 **Before presenting the resume summary, verify that file paths stored in memory still exist** (simulator screenshots, design files, finals). If a path recorded in memory is missing on disk, treat that phase as needing redo and say so in the summary rather than presenting it as complete.
 
@@ -52,9 +54,10 @@ Here's where we left off:
 ✅ Brand colour: Electric Blue (#2563EB)
 ✅ iPhone generation: 3 of 3 screenshots rendered and approved (screenshots/design/ → screenshots/final/)
 ⏳ iPad extension: not started (optional)
+⏳ iPhone Duo extension: not started (optional — required from April 2027 for apps built with the iOS 27.1 SDK or later)
 ⏳ Localization: not started (optional)
 
-Ready to start the iPad set, localize the iPhone set, or would you like to change anything?
+Ready to start the iPad or iPhone Duo set, localize the iPhone set, or would you like to change anything?
 ```
 
 **Then let the user decide what to do:**
@@ -256,18 +259,21 @@ The gemini/codex image backends are **NOT** needed for rendering. They are optio
 
 ### App Store Connect Dimensions
 
-App Store Connect is **very strict** about image dimensions — it will reject screenshots that don't match exactly. Apple's current spec organises iPhone sizes into two display classes:
+App Store Connect is **very strict** about image dimensions — it will reject screenshots that don't match exactly. Apple's current spec organises iPhone sizes into two display classes, plus a separate iPhone Duo slot:
 
 | Display class | Primary portrait | Accepted alternatives |
 |---------------|------------------|-----------------------|
 | iPhone 6.9" (**required** — every app must supply this class) | 1260 x 2736px | 1290 x 2796px, 1320 x 2868px |
 | iPhone 6.5" (fallback) | 1284 x 2778px | 1242 x 2688px |
+| iPhone Duo (its own slot, `APP_IPHONE_DUO`; **required from April 2027** for apps built with the iOS 27.1 SDK or later, and what earns the "optimized for iPhone Duo" badge) | 1398 x 2034px (cover) | 2007 x 2853px (inner) |
+
+The Duo slot is filled by the opt-in Duo phase (`references/duo-extension.md`), not by the iPhone set: its aspect (0.687) is nothing like a tall iPhone's.
 
 Default to **1290 x 2796px** — a 6.9"-class accepted size. The browser renders this natively at exactly the right pixel dimensions (the viewport is set to the target size), so there is **no crop, resize, or aspect-ratio dance** — the render IS the final size, and the QA loop simply verifies it with `sips`. State the choice to the user (e.g. "I'll target 1290×2796, a 6.9"-class size that covers the required slot"), and only ask which other size(s) they need if the user's listing requires them. Up to 10 screenshots can be uploaded per display size.
 
-**The templates canonically support two portrait sizes: iPhone 1290×2796 and iPad 2064×2752.** The whole token set in `set.css` — canvas dimensions, type scale, frame geometry, and `--screen-scale` — is built for these. Rendering another size is not just a viewport change: it requires adapting that full token set to the new canvas so the typography, frame, and breakout geometry stay proportioned, plus the matching viewport. Offer that as extra adaptation work when a listing needs a different size, not as a flag. **Landscape is not supported.**
+**The templates canonically support three portrait sizes: iPhone 1290×2796, iPad 2064×2752, and iPhone Duo cover 1398×2034.** The whole token set in `set.css` — canvas dimensions, type scale, frame geometry, and `--screen-scale` — is built for these. Rendering another size is not just a viewport change: it requires adapting that full token set to the new canvas so the typography, frame, and breakout geometry stay proportioned, plus the matching viewport. Offer that as extra adaptation work when a listing needs a different size, not as a flag. **Landscape is not supported.**
 
-When a listing genuinely needs another **portrait** slot (e.g. the 6.5" 1284×2778 fallback, or iPad 11" 1668×2388), the adaptation is mechanical — scale, don't redesign. Let `f = new width ÷ 1290` (iPad: `÷ 2064`). In that device's `set.css` token block: set `--canvas-w/h` to the new size, multiply every px token in the block by `f` (type scale, `--head-top`, `--device-gap`, `--bezel`, radii, island size), keep `--raw-w` equal to the raws' true pixel width, and multiply `--screen-scale` by `f` so the frame keeps the same fraction of the canvas. Render at the matching viewport and run the normal QA loop. Breakout crop values are in raw pixels and survive unchanged, but re-run the containment pre-check — the canvas the card must fit in changed.
+When a listing genuinely needs another **portrait** slot (e.g. the 6.5" 1284×2778 fallback, or iPad 11" 1668×2388), the adaptation is mechanical — scale, don't redesign. Let `f = new width ÷ 1290` (iPad: `÷ 2064`; Duo: `÷ 1398`, e.g. the 2007×2853 inner display). In that device's `set.css` token block: set `--canvas-w/h` to the new size, multiply every px token in the block by `f` (type scale, `--head-top`, `--device-gap`, `--bezel`, radii, island size), keep `--raw-w` equal to the raws' true pixel width, and set `--screen-scale` so the frame keeps the same fraction of the canvas: `--screen-scale` is on-canvas px ÷ raw px, so multiply it by `f` only when the SAME raws are reused on the new canvas; native captures for the new display (e.g. 1668-wide iPad 11" raws, 2007-wide Duo inner raws) grow or shrink with the canvas, so the ratio already holds — keep it (`old × f × old raw-w ÷ new raw-w` in general), then re-check the bottom bleed and re-solve it if the new aspect moved it. Render at the matching viewport and run the normal QA loop. Breakout crop values are in raw pixels and survive unchanged, but re-run the containment pre-check — the canvas the card must fit in changed.
 
 ### Screenshot Format Specification
 
@@ -325,22 +331,22 @@ The brand colour is saved to memory in Step 0 of the design process (the generat
 
 Generation is a design-authoring loop, not a scaffold-then-repaint pipeline. You write HTML/CSS design files, render them deterministically in the browser, Read the output, and adjust the CSS. Every render is free.
 
-The skill ships a high-quality **base template** so the design floor is high — you customize from it rather than from blank. It lives in the skill directory at `assets/html/` (`base.css`, `iphone.html`, `ipad.html`, `README.md`). The skill's actual base directory is shown when the skill loads ("Base directory for this skill: ..."). Use that path as `SKILL_DIR`, falling back to the conventional default `$HOME/.claude/skills/aso-appstore-screenshots` if it is not shown. Read `$SKILL_DIR/assets/html/README.md` before authoring — it documents the template's structure, the custom properties you tune, and the device-frame variables.
+The skill ships a high-quality **base template** so the design floor is high — you customize from it rather than from blank. It lives in the skill directory at `assets/html/` (`base.css`, `iphone.html`, `ipad.html`, `duo.html`, `README.md`). The skill's actual base directory is shown when the skill loads ("Base directory for this skill: ..."). Use that path as `SKILL_DIR`, falling back to the conventional default `$HOME/.claude/skills/aso-appstore-screenshots` if it is not shown. Read `$SKILL_DIR/assets/html/README.md` before authoring — it documents the template's structure, the custom properties you tune, and the device-frame variables.
 
 **The skill ships ONE proven high-converting layout family** — flat brand fill, top uppercase two-line headline, centered device bleeding off the bottom, optional breakout card. Design directions vary *within* that family (accent treatment, device position, breakout choice, colour); they do NOT reach across layout archetypes.
 
 **Ownership tiers** (resolves what is set-wide vs per-shot):
 - **LOCKED set-wide** — palette (`--bg`/`--fg`), type family + scale + tracking, frame style, shadow/border vocabulary. Never overridden per shot; a change here re-flows the whole set (that's correct).
-- **PER DEVICE** — canvas dimensions + frame geometry, via the `body.iphone` / `body.ipad` token blocks in `set.css`.
+- **PER DEVICE** — canvas dimensions + frame geometry, via the `body.iphone` / `body.ipad` / `body.duo` token blocks in `set.css`.
 - **PER LOCALE** — type-metric overrides via `body:lang()` blocks in `set.css` (the localization reference owns the specifics).
 - **PER SHOT** — headline text, raw `src`, breakout geometry vars (`--crop-*`/`--zoom`/`--shift-*`), 0-2 decorations, and exactly ONE documented composition nudge: a per-shot `--device-gap` override on the page to tune the device's vertical position. Nothing else is per-shot.
 
 **Step 0: Preflight the raws, save brand colour to memory, then set up the design directory**
 
-**Preflight the paired raws first.** `set.css` hardcodes `--raw-w` (1290px iPhone / 2064px iPad) and the pairing phase accepts arbitrary simulator captures, so verify the raws match before authoring. Run `sips -g pixelWidth -g pixelHeight` on every paired raw and require:
+**Preflight the paired raws first.** `set.css` hardcodes `--raw-w` (1290px iPhone / 2064px iPad / 1398px Duo cover) and the pairing phase accepts arbitrary simulator captures, so verify the raws match before authoring. Run `sips -g pixelWidth -g pixelHeight` on every paired raw and require:
 - **Identical dimensions and portrait orientation across the whole set** — mixed sizes mean mixed device silhouettes. If they differ, ask the user to recapture the set on ONE simulator device; do not silently mix.
 - **Expected 1290×2796 for iPhone** (a 6.9"-class capture). If the raws are uniform but a different size (e.g. 1179×2556 from a smaller device): set `--raw-w` in `set.css` to the actual raw width and recompute `--screen-scale = intended on-canvas screen width ÷ raw width` so the device keeps its intended on-canvas size (breakout crop coordinates are measured in that raw's real pixels, so `--raw-w` must be the true width).
-- **Status-bar compatibility** — glance at each raw's top strip. The CSS-drawn Dynamic Island overlays the raw's status-bar area, so a capture whose status-bar layout collides with it (e.g. a notch-era device) needs different raws or adjusted `--island-*` tokens.
+- **Status-bar compatibility** — glance at each raw's top strip. The CSS-drawn Dynamic Island overlays the raw's status-bar area, so a capture whose status-bar layout collides with it (e.g. a notch-era device) needs different raws or adjusted `--island-*` tokens. (iPhone Duo cover raws are the exception: their status bar sits in a system vertical bar down the trailing edge and `body.duo` draws no island — see `references/duo-extension.md`.)
 
 Save the confirmed brand colour to the generation state file (`aso_generated_screenshots.md`) — this is its canonical home and it must persist before any rendering. Then create the per-app design directory in the user's project and vendor the assets the final render needs (final renders load ZERO external resources):
 
@@ -404,8 +410,8 @@ A breakout is a **magnified copy** of a panel, not a second decoration — so it
 
 **Scale (checked in QA) — know the two numbers, they are not the same:**
 
-- **How big the card READS vs the on-screen original** = `--zoom ÷ --screen-scale` (with the shipped scales: ≈ `--zoom × 1.21` on iPhone, `× 1.24` on iPad). This is what makes a breakout feel deliberate, and it does **not** depend on the crop size: `--zoom: 1.0` reads only **~1.2×**, `1.2` reads **~1.5×**, `1.5` reads **~1.9×**. So a card at `--zoom: 1.0` is a near-twin of its source — barely worth the ink. **Reach for ≥ ~1.5× read (i.e. `--zoom` ≥ ~1.2).**
-- **How WIDE the card lands on the canvas** = `--crop-w × --zoom`. This is what the crop size controls, and it is the real constraint: a near-full-width panel (~1250 raw px on the 1290px iPhone raw; ~2000 on iPad) can't go past `--zoom` ~1.0 without the card overflowing its canvas. **That is why sub-block crops exist** — they buy zoom headroom. On iPhone a ~600px sub-block can take `--zoom: 1.5` (a ~900px card on the 1290px canvas); on iPad a ~1200px sub-block can do the same; a badge-sized crop can take 3×+ on either device.
+- **How big the card READS vs the on-screen original** = `--zoom ÷ --screen-scale` (with the shipped scales: ≈ `--zoom × 1.21` on iPhone, `× 1.24` on iPad, `× 1.22` on the Duo cover). This is what makes a breakout feel deliberate, and it does **not** depend on the crop size: `--zoom: 1.0` reads only **~1.2×**, `1.2` reads **~1.5×**, `1.5` reads **~1.9×**. So a card at `--zoom: 1.0` is a near-twin of its source — barely worth the ink. **Reach for ≥ ~1.5× read (i.e. `--zoom` ≥ ~1.2).**
+- **How WIDE the card lands on the canvas** = `--crop-w × --zoom`. This is what the crop size controls, and it is the real constraint: a near-full-width panel (~1250 raw px on the 1290px iPhone raw; ~2000 on iPad) can't go past `--zoom` ~1.0 without the card overflowing its canvas. **That is why sub-block crops exist** — they buy zoom headroom. On iPhone a ~600px sub-block can take `--zoom: 1.5` (a ~900px card on the 1290px canvas); on iPad a ~1200px sub-block can do the same; on the Duo cover the app's content is only the leading ~1146px (the trailing vertical bar is system chrome), so a full-content panel is ~1000 raw px and a ~650px sub-block takes `--zoom: 1.5` (a ~975px card on the 1398px canvas); a badge-sized crop can take 3×+ on either device.
 
 `--zoom` above ~1 upscales real pixels, so **softness is the ceiling, not a fixed number** — the 1:1 QA Read is the judge. Clean UI raster (flat shapes, badges, big numerals) holds up well past 1.5×; dense small text softens early. If the magnified text looks mushy: tighten the sub-block (buys zoom without extra width), back off `--zoom`, or use the opt-in genai hero path (`references/genai-pieces.md`). If a full-width panel is the only thing that reinforces the headline, accept the modest ~1.2× read or drop the breakout — don't fake drama the pixels can't pay for.
 
@@ -422,7 +428,7 @@ agent-browser screenshot screenshots/design/preview/01-track-card-prices.png
 cp screenshots/design/preview/01-track-card-prices.png screenshots/final/01-track-card-prices.png
 ```
 
-- Set the viewport to the target size (1290×2796 for the iPhone set; 2064×2752 for iPad). The render is natively that exact size — no crop, no resize, no `--aspect-ratio`. (A different display-size slot is a full `set.css` token adaptation plus its matching viewport, never a viewport change alone — see App Store Connect Dimensions.)
+- Set the viewport to the target size (1290×2796 for the iPhone set; 2064×2752 for iPad; 1398×2034 for the iPhone Duo cover). The render is natively that exact size — no crop, no resize, no `--aspect-ratio`. (A different display-size slot is a full `set.css` token adaptation plus its matching viewport, never a viewport change alone — see App Store Connect Dimensions.)
 - `wait "body.ready"` is mandatory before every screenshot. The readiness gate (`ready.js`) is **fail-closed**: `body.ready` fires ONLY when every check passes — fonts resolved, every `<img>` decoded with `naturalWidth > 0`, the raw copies matching `--raw-w`, the headline font face checking out (a CJK headline on the Latin face fails), the `set.css` custom properties and body background resolving, the headline fitting its box, and no headline glyph colliding with the line beneath — a broken or missing asset no longer passes the gate. If `wait "body.ready"` times out, the page failed the gate: check for `body.render-error` / the `data-render-error` attribute (e.g. via agent-browser's JS-eval command) — it names exactly what failed (undecoded raw, raw-width mismatch, missing font, unresolved property or background, headline overflow, headline glyph collision). Fix the named cause and re-render.
 - **Staging — every render goes to `screenshots/design/preview/`; approval promotes it.** One unconditional rule: candidates, first renders, and re-renders all write to the working path `screenshots/design/preview/`, and only after the QA loop passes AND the user approves do you `cp` the preview over `screenshots/final/0N-<slug>.png`. The path never depends on remembering a shot's approval state (which lives in memory and may be stale across conversations), and a draft can never overwrite an approved final. `screenshots/design/preview/` is disposable scratch space and is never uploaded to App Store Connect.
 - When the whole batch is done (or before switching to an unrelated task), close the session: `agent-browser close`.
@@ -433,7 +439,7 @@ cp screenshots/design/preview/01-track-card-prices.png screenshots/final/01-trac
    sips -g pixelWidth -g pixelHeight screenshots/design/preview/01-track-card-prices.png
    ```
    It must read 1290 × 2796 (or the chosen target). A wrong size means the viewport wasn't set — fix and re-render.
-2. **Read the PNG yourself** and check: headline wording is correct and intact; headline keeps ≥ ~6% margin from every edge; the CSS frame is intact (no clipped bezel, Dynamic Island present); the background is the flat brand colour; the breakout is **fully on the canvas** (no card edge sliced by the canvas edge — bleeding past the *bezel* left/right is the point, past the *canvas* never is) and **covers its source** (a full-panel card fully occludes its panel with no visible duplication beside it; a **sub-block** card only has to cover its own crop's footprint — the rest of the panel around it is context, not duplication); the breakout scale matches the doctrine (target a **≥ ~1.5× read**, i.e. `--zoom` ≥ ~1.2) and the magnified text still reads **crisp, not mushy** — if it's soft, tighten the sub-block (keeps the read ratio, buys sharpness), back off the zoom toward its coverage floor, or consider the genai hero path (`references/genai-pieces.md`).
+2. **Read the PNG yourself** and check: headline wording is correct and intact; headline keeps ≥ ~6% margin from every edge; the CSS frame is intact (no clipped bezel, Dynamic Island present on iPhone — iPad shows a camera dot and the Duo cover neither; see the device reference); the background is the flat brand colour; the breakout is **fully on the canvas** (no card edge sliced by the canvas edge — bleeding past the *bezel* left/right is the point, past the *canvas* never is) and **covers its source** (a full-panel card fully occludes its panel with no visible duplication beside it; a **sub-block** card only has to cover its own crop's footprint — the rest of the panel around it is context, not duplication); the breakout scale matches the doctrine (target a **≥ ~1.5× read**, i.e. `--zoom` ≥ ~1.2) and the magnified text still reads **crisp, not mushy** — if it's soft, tighten the sub-block (keeps the read ratio, buys sharpness), back off the zoom toward its coverage floor, or consider the genai hero path (`references/genai-pieces.md`).
 3. **If the shot has a breakout, QA it at 1:1 (mandatory).** Start with **(a) containment**, checked first because it is objective and cheap: assert the card's computed box (Breakout flow step 2) is inside the canvas bounds, and confirm in the render that **no card edge is cut by the canvas edge** — top/bottom especially, since the device bleeds off the canvas bottom. Then, because the full-canvas Read above is downscaled ~2.7× and hides 10-30px defects (a source-panel sliver peeking past a card edge, a background-coloured stripe inside the card border), extract the breakout region **plus ~80px margin at native resolution** (a Pillow crop of the render) and Read that for the rest. Require all four: (a) the card sits fully inside the canvas, (b) no sliver of the source panel peeking past any card edge, (c) no background-coloured stripes inside the card border, (d) crisp text. Fix (b)-(d) with the crop (re-measure/inset), `--shift-x/y`, or `--zoom` and re-render. Fix **(a) by changing the panel, not the placement** — a low-on-screen panel is ineligible, so pick an on-canvas panel, use a raw where it sits higher, or drop the breakout (Breakout flow step 2's ladder).
 4. Any failure is fixed **in CSS/HTML** and re-rendered — $0 per iteration. Only clean renders are shown to the user.
 
@@ -519,16 +525,16 @@ uv run "$SKILL_DIR/showcase.py" \
   --output screenshots/showcase.png
 ```
 
-Ask the user for the URL they want on the showcase (their GitHub, App Store, or product page), or **omit the `--github` flag entirely** if they don't want a link. Remember the user's choice — the iPad showcase reuses it.
+Ask the user for the URL they want on the showcase (their GitHub, App Store, or product page), or **omit the `--github` flag entirely** if they don't want a link. Remember the user's choice — the iPad and iPhone Duo showcases reuse it.
 
 Show the showcase image to the user using the Read tool. This is a shareable preview of the full screenshot set.
 
 ### What's Next — Optional Extensions
 
-After the iPhone showcase is shown and the user is happy with the iPhone set, **explicitly offer TWO optional next steps** and let the user pick either, both, or neither:
+After the iPhone showcase is shown and the user is happy with the iPhone set, **explicitly offer THREE optional next steps** and let the user pick any combination, or none:
 
 ```
-Your iPhone set is complete. Two optional next steps — pick either, both, or neither:
+Your iPhone set is complete. Three optional next steps — pick any, all, or none:
 
 1. Localize the iPhone set — translated headlines per locale. If your app's UI supports
    the language, you capture localized simulator screenshots and each shot is rebuilt
@@ -538,13 +544,19 @@ Your iPhone set is complete. Two optional next steps — pick either, both, or n
 2. Create the iPad set — a separate set that reuses your benefits and brand colour but
    needs iPad simulator screenshots (different aspect ratio) and a different device frame.
 
-Reply "localize", "iPad", "both", or "no" / "later". Memory persists, so you can always
-come back and run the skill again to do either later.
+3. Create the iPhone Duo set — the same benefits and brand colour on the Duo cover
+   (1398x2034), from iPhone Duo simulator screenshots. Submitting it earns the
+   "optimized for iPhone Duo" badge, and it becomes required in April 2027 for apps
+   built with the iOS 27.1 SDK or later.
+
+Reply "localize", "iPad", "Duo", any combination, or "no" / "later". Memory persists, so
+you can always come back and run the skill again to do any of them later.
 ```
 
 - **If the user chooses localization**: Read `references/localization.md` (relative to the skill directory) and follow it, targeting the iPhone set.
 - **If the user chooses the iPad set**: Read `references/ipad-extension.md` (relative to the skill directory) and follow it.
-- **If the user picks both**: do them in the order the user prefers (typically iPad first, then localize whichever set(s) they want — iPad localization is offered only after the iPad English set is approved, per the iPad reference).
+- **If the user chooses the iPhone Duo set**: Read `references/duo-extension.md` (relative to the skill directory) and follow it.
+- **If the user picks more than one**: do them in the order the user prefers (typically the device sets first, then localize whichever set(s) they want — iPad and Duo localization are offered only after that device's English set is approved, per their references).
 - **If the user declines**: stop here.
 
 ---

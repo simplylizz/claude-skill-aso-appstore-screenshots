@@ -11,7 +11,8 @@ A Claude Code skill that generates high-converting App Store screenshots for you
 3. **iPhone Generation** — Creates polished iPhone App Store screenshots by authoring an HTML/CSS design system (`screenshots/design/set.css` + one HTML page per shot) and rendering each page to a PNG at the exact App Store size with a headless browser. The first shot renders 2-3 free design directions for you to pick from; your pick locks `set.css` as the shared design system for the whole set, so every subsequent shot is consistent by construction. Renders and iteration are $0 — there's no paid image call in the happy path.
 4. **Showcase** — Generates a preview image with all iPhone screenshots side-by-side
 5. **iPad Extension (optional)** — After the iPhone set is approved, the skill asks whether you want a matching iPad set at 2064×2752. If you say yes, it reuses your benefits, brand colour, and the iPhone set's design language, adds an iPad design system at `screenshots/design/ipad/`, and just needs iPad simulator screenshots; if you decline, it stops. This phase is defined in `references/ipad-extension.md`, which the skill loads on demand.
-6. **Localization (optional)** — Once a device's English set is approved, the skill can produce localized sets. It translates the marketing headlines per locale, sets `<html lang>` on each page, and re-renders — **zero paid calls**. If your app's UI is localized you capture localized simulator screenshots (the skill gives you an `xcrun simctl` recipe) so the on-screen UI is genuine; otherwise the on-screen UI stays English under the translated headline. CJK locales (Japanese/Korean/Chinese) vendor a matching heavy webfont (Noto Sans JP/KR/SC Black) so headlines render in the right heavy face. Outputs land in `screenshots/final/<locale>/` (iPad: `screenshots/final/ipad/<locale>/`). This phase is defined in `references/localization.md`, loaded on demand.
+6. **iPhone Duo Extension (optional)** — After the iPhone set is approved, the skill also offers a matching iPhone Duo set on the cover display (1398×2034). Apple requires Duo screenshots from April 2027 for apps built with the iOS 27.1 SDK or later, and submitting them earns the "optimized for iPhone Duo" badge. It reuses your benefits, brand colour and design language, adds a Duo design system at `screenshots/design/duo/`, and needs cover captures from an iPhone Duo simulator (the skill shows how to pick the right display, since `simctl` won't guess on a two-display device). The system's vertical bar down the cover's trailing edge stays in the shot. Defined in `references/duo-extension.md`, loaded on demand.
+7. **Localization (optional)** — Once a device's English set is approved, the skill can produce localized sets. It translates the marketing headlines per locale, sets `<html lang>` on each page, and re-renders — **zero paid calls**. If your app's UI is localized you capture localized simulator screenshots (the skill gives you an `xcrun simctl` recipe) so the on-screen UI is genuine; otherwise the on-screen UI stays English under the translated headline. CJK locales (Japanese/Korean/Chinese) vendor a matching heavy webfont (Noto Sans JP/KR/SC Black) so headlines render in the right heavy face. Outputs land in `screenshots/final/<locale>/` (iPad: `screenshots/final/ipad/<locale>/`; Duo: `screenshots/final/duo/<locale>/`). This phase is defined in `references/localization.md`, loaded on demand.
 
 ## Installation
 
@@ -86,7 +87,7 @@ The skill will guide you through each phase interactively. Progress is saved to 
 Rather than repainting a whole canvas with an image model (inconsistent, costly), the skill treats the LLM as the designer and a browser as the renderer:
 
 1. **Author** — Claude copies the shipped base template (`assets/html/`) into your project as `screenshots/design/`, adapting `base.css` into a per-app `set.css` (brand colour, uniform type scale, CSS-drawn device frame) and writing one HTML page per benefit. Everything the pages need — fonts, any icon SVGs — is vendored into `screenshots/design/assets/`, so a final render loads **zero** external resources.
-2. **Render** — `agent-browser` opens each page at the exact App Store viewport (e.g. `1290 2796`), waits for `body.ready`, and screenshots it. The readiness gate is **fail-closed**: `body.ready` fires only once fonts resolved, every image decoded, the headline font checks out, and the design system's custom properties resolve — a broken or missing asset does NOT pass; the page adds `body.render-error` with a `data-render-error` reason instead, and a `wait "body.ready"` timeout is the signal to read that reason. The viewport **is** the output size — no crop, resize, or aspect-ratio step; the render is natively the exact dimension.
+2. **Render** — `agent-browser` opens each page at the exact App Store viewport (e.g. `1290 2796`; `2064 2752` iPad; `1398 2034` Duo), waits for `body.ready`, and screenshots it. The readiness gate is **fail-closed**: `body.ready` fires only once fonts resolved, every image decoded, the headline font checks out, and the design system's custom properties resolve — a broken or missing asset does NOT pass; the page adds `body.render-error` with a `data-render-error` reason instead, and a `wait "body.ready"` timeout is the signal to read that reason. The viewport **is** the output size — no crop, resize, or aspect-ratio step; the render is natively the exact dimension.
 3. **QA loop** — Claude reads each PNG, checks the headline wording/margins, frame integrity, flat background, breakout alignment, and exact pixel dimensions (`sips`), and fixes anything in CSS/HTML before re-rendering. Every iteration is $0.
 
 The uniform type scale and the CSS device frame live in `set.css`, so "same size, same frame on every screenshot" survives per-shot HTML by construction.
@@ -125,26 +126,40 @@ screenshots/
     01-benefit-slug.png
   showcase-ipad.png           ← iPad showcase
 
+  # Only if you opt into the iPhone Duo extension:
+  design/duo/                 ← Duo design system (its own set.css, body.duo tokens, no island)
+    set.css                   ← @font-face urls point at ../assets/ — fonts are NOT re-vendored
+    ready.js                  ← the readiness gate, copied next to this set.css
+    01-benefit-slug.html
+    raw/                      ← vendored Duo cover raws (system vertical bar intact)
+    preview/                  ← disposable Duo working renders
+  final/duo/                  ← approved iPhone Duo screenshots, ready to upload
+    01-benefit-slug.png
+  showcase-duo.png            ← Duo showcase
+
   # Only if you opt into localization (one subdirectory per locale):
   design/de-DE/               ← localized iPhone pages (translated headlines)
   design/ipad/de-DE/          ← localized iPad pages
+  design/duo/de-DE/           ← localized Duo pages
   final/de-DE/                ← localized iPhone set, ready to upload
   final/ipad/de-DE/           ← localized iPad set, ready to upload
+  final/duo/de-DE/            ← localized Duo set, ready to upload
 ```
 
-Finals are PNGs at exactly the target Apple dimensions (iPhone default 1290×2796, a 6.9"-class accepted size; iPad 13" Pro default 2064×2752) — the render is natively exact, so there are no resized copies. The English set stays at the `final/` (or `final/ipad/`) root; each localized set goes in a subdirectory named by its App Store Connect locale code.
+Finals are PNGs at exactly the target Apple dimensions (iPhone default 1290×2796, a 6.9"-class accepted size; iPad 13" Pro default 2064×2752; iPhone Duo cover 1398×2034) — the render is natively exact, so there are no resized copies. The English set stays at the `final/` (or `final/ipad/`, `final/duo/`) root; each localized set goes in a subdirectory named by its App Store Connect locale code.
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `SKILL.md` | The skill prompt — defines the multi-phase workflow (iPhone, then optional iPad / localization) |
+| `SKILL.md` | The skill prompt — defines the multi-phase workflow (iPhone, then optional iPad / iPhone Duo / localization) |
 | `references/ipad-extension.md` | The opt-in iPad phase, loaded by SKILL.md after the iPhone set is approved |
+| `references/duo-extension.md` | The opt-in iPhone Duo phase (cover display 1398×2034), loaded by SKILL.md after the iPhone set is approved |
 | `references/localization.md` | The opt-in localization phase, loaded by SKILL.md after a device's English set is approved |
 | `references/genai-pieces.md` | The opt-in genai-piece flow (backend resolution, `enhance.py`/`cutout.py` invocations, compositing), loaded only when the user requests a piece |
-| `assets/html/` | The shipped base template: `base.css` (design system), `ready.js` (the shared fail-closed readiness gate), `iphone.html` / `ipad.html` (example pages), placeholder raws, and a `README.md` documenting the slots, custom properties, and render sequence |
+| `assets/html/` | The shipped base template: `base.css` (design system), `ready.js` (the shared fail-closed readiness gate), `iphone.html` / `ipad.html` / `duo.html` (example pages), synthetic placeholder raws, and a `README.md` documenting the slots, custom properties, and render sequence |
 | `assets/fonts/` | Bundled Inter fonts (SIL OFL) — `InterDisplay-Black.otf` for headlines (loaded via `@font-face`, vendored per project) and `Inter-Regular.otf` for the showcase URL |
-| `showcase.py` | Generates the side-by-side showcase image from all finals (self-contained; works for iPhone or iPad) |
+| `showcase.py` | Generates the side-by-side showcase image from all finals (self-contained; works for iPhone, iPad or iPhone Duo) |
 | `enhance.py` | Optional per-piece image-generation wrapper (`google-genai` SDK or the OpenAI `codex` CLI) — used only for isolated genai pieces, never the full canvas |
 | `cutout.py` | Optional chroma-key helper that turns a genai piece's flat background transparent so it can be composited as an `<img>` layer |
 

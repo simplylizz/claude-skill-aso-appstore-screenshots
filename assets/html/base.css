@@ -15,7 +15,8 @@
    INVARIANTS enforced here (canonical doctrine + full breakout rules live in
    SKILL.md's Breakout flow; this list is the summary that travels with the
    stylesheet):
-     - Canvas is EXACTLY the App Store size (iPhone 1290x2796, iPad 2064x2752).
+     - Canvas is EXACTLY the App Store size (iPhone 1290x2796, iPad 2064x2752,
+       iPhone Duo cover 1398x2034).
      - The type scale (--verb-size / --desc-size) is uniform across the whole
        set. Do NOT override it per shot — if a headline overflows, adjust the
        set-wide scale or reword, never add a one-off size.
@@ -65,7 +66,8 @@ img { display: block; max-width: 100%; }
 /* ============================================================================
    DESIGN TOKENS
    Shared defaults live on :root; per-device values live in the body.iphone /
-   body.ipad blocks below. Override the colour + scale tokens per app.
+   body.ipad / body.duo blocks below. Override the colour + scale tokens per
+   app.
    ============================================================================ */
 :root {
   /* Brand */
@@ -103,12 +105,13 @@ img { display: block; max-width: 100%; }
   --breakout-shadow: 0 40px 90px rgba(0, 0, 0, 0.40);
   --breakout-border: 3px solid rgba(255, 255, 255, 0.85);
 
-  /* Island/camera-dot pill shape — shared by both devices. */
+  /* Island/camera-dot pill shape — shared by every device that draws one
+     (iPhone island, iPad camera dot; the Duo draws neither). */
   --island-radius: 999px;
 }
 
 /* Derived per-element from the device block's --raw-w / --screen-scale /
-   --bezel, so declaring it ONCE here serves both devices — and a frame resize
+   --bezel, so declaring it ONCE here serves every device — and a frame resize
    (via --screen-scale) can never desync breakout placement from the frame. */
 body {
   --device-w: calc(var(--raw-w) * var(--screen-scale) + 2 * var(--bezel));
@@ -192,12 +195,67 @@ body.ipad {
   --breakout-radius: 34px;
 }
 
+/* ---------------------------------------------------------------------------
+   iPhone Duo variant — COVER display, canvas 1398 x 2034, aspect 0.687.
+   The cover's aspect is far closer to iPad 13" (0.750) than to a tall iPhone
+   (0.461), so this block is the iPad block scaled by 1398/2064 (~0.677), with
+   three deliberate departures:
+     - --head-top is held at >= 6% of the canvas HEIGHT (124px), not the
+       scaled 114px — the edge-margin invariant is a canvas percentage.
+     - --screen-scale is re-solved for the short canvas so the device still
+       bleeds ~7% off the bottom (iPhone and iPad both bleed ~197px, ~7%).
+     - --breakout-radius is 28px, not the scaled 23px — a design choice, not
+       a derived value; tune it with the rest of the card styling.
+   NO Dynamic Island and NO camera dot: on the cover the system draws a
+   vertical bar down the TRAILING edge of the screen (~84pt / ~252px of the
+   1398px raw) holding the clock, wifi and the app's toolbar items. That bar
+   is part of the raw capture — never crop it out, never draw an island over
+   the raw's top edge (there is no status bar there).
+   The inner (unfolded) display is 2007 x 2853; see references/duo-extension.md
+   before targeting it — it needs its own canvas/token adaptation.
+--------------------------------------------------------------------------- */
+body.duo {
+  --canvas-w: 1398px;
+  --canvas-h: 2034px;
+
+  --verb-size: 160px;
+  --desc-size: 73px;
+  --head-top: 124px;        /* >= 6% of the 2034px canvas height */
+  --device-gap: 95px;
+
+  --bezel: 20px;
+  --frame-radius: 62px;
+  --screen-radius: 41px;
+  /* CONTRACT (see iphone block): --raw-w == the raw PNG's real pixel width; all
+     raws in a set share identical dimensions. A cover capture is natively
+     1398 wide; if the raws differ (uniformly), recompute
+     --screen-scale = intended on-canvas screen width / raw width. */
+  --raw-w: 1398px;
+
+  /* The device-size knob — see the iphone block. 0.8211731 -> a 1148px screen
+     inside a 1188px frame (7.5% side margins), solved so that with a one-line
+     verb + one-line descriptor the frame bottom lands ~144px (~7%) past the
+     canvas bottom, matching the bleed of the iPhone and iPad blocks while
+     still showing ~93% of the raw's height. Raise it for more screen and more
+     bleed; a two-line headline pushes the device down by one verb line. */
+  --screen-scale: 0.8211731;
+
+  /* No island / camera dot on the Duo cover (the status bar lives in the
+     raw's trailing vertical bar). Zeroed so the tokens still resolve; the
+     pseudo-element itself is removed by the body.duo rule further down. */
+  --island-w: 0px;
+  --island-h: 0px;
+  --island-top: 0px;
+
+  --breakout-radius: 28px;
+}
+
 /* ============================================================================
    CANVAS + LAYOUT
    ============================================================================ */
 html {
   /* The viewport IS the canvas size, so 100% is exact. The --canvas-* vars are
-     defined on body.iphone/body.ipad and do NOT inherit upward, so sizing html
+     defined on the body.<device> blocks and do NOT inherit upward, so sizing html
      with them would resolve to `auto`; size only body with the vars below. */
   width: 100%;
   height: 100%;
@@ -281,7 +339,8 @@ body {
   background: var(--screen-bg);
 }
 /* Dynamic Island (iPhone) / front-camera dot (iPad) — same pseudo-element,
-   sized by the per-device --island-* tokens. */
+   sized by the per-device --island-* tokens. The Duo draws neither (rule
+   below). */
 .device::after {
   content: "";
   position: absolute;
@@ -298,6 +357,11 @@ body {
 body.ipad .device::after {
   background: #050506;
   box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.06);
+}
+/* iPhone Duo cover: no island, no camera dot on screen — the status bar sits
+   in the raw's trailing vertical bar, so there is nothing to draw over. */
+body.duo .device::after {
+  display: none;
 }
 
 /* ============================================================================

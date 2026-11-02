@@ -13,7 +13,8 @@ then renders each page to a PNG with [agent-browser](https://github.com/vercel-l
 | `ready.js` | The shared **fail-closed readiness gate** (one copy — pages load it via `<script src="ready.js">`). Vendored next to `set.css` at runtime; never inlined or edited per shot. |
 | `iphone.html` | Example iPhone page (1290×2796). Copy per shot; edit only the marked slots. |
 | `ipad.html` | Example iPad page (2064×2752). Same structure, `body.ipad` + iPad viewport. |
-| `placeholder-screen-iphone.png` / `placeholder-screen-ipad.png` | Demo simulator raws so the pages render standalone. **Replace** with the captured app screenshot at runtime. |
+| `duo.html` | Example iPhone Duo **cover** page (1398×2034). Same structure, `body.duo` + Duo viewport; no island/camera dot (the status bar lives in the raw's trailing vertical bar). |
+| `placeholder-screen-iphone.png` / `placeholder-screen-ipad.png` / `placeholder-screen-duo.png` | Synthetic demo raws so the pages render standalone (the Duo one carries a ~252px trailing vertical bar like a real cover capture). **Replace** with the captured app screenshot at runtime. |
 
 Fonts live one level up in `../fonts/` (bundled Inter, SIL OFL).
 
@@ -55,16 +56,16 @@ stylesheet behind custom properties.
 **Brand / type** (override per app): `--bg`, `--fg`, `--verb-size`,
 `--desc-size`, `--verb-tracking`, `--desc-tracking`, `--headline-side-pad`.
 
-**Frame** (per-device blocks `body.iphone` / `body.ipad`): `--device-w`,
-`--bezel`, `--bezel-color`, `--frame-radius`, `--screen-radius`,
+**Frame** (per-device blocks `body.iphone` / `body.ipad` / `body.duo`):
+`--device-w`, `--bezel`, `--bezel-color`, `--frame-radius`, `--screen-radius`,
 `--island-w`/`--island-h`/`--island-top` (Dynamic Island on iPhone, a small
-camera dot on iPad), `--frame-shadow`.
+camera dot on iPad, zeroed and hidden on the Duo cover), `--frame-shadow`.
 
 **Breakout** (set inline per shot, all in *raw screenshot pixels* except
 `--zoom`, the display scale): `--crop-x`, `--crop-y`, `--crop-w`, `--crop-h`,
 `--zoom`, and the placement nudges `--shift-x`/`--shift-y` (default `0px`).
 `--screen-scale` (per-device, in `base.css` — read the shipped value from the
-`body.iphone` / `body.ipad` block rather than copying it into prose) is the
+`body.iphone` / `body.ipad` / `body.duo` block rather than copying it into prose) is the
 ratio of on-canvas screen px to raw px, and it is **the device-size knob**:
 `--device-w` is derived from it (`--raw-w * --screen-scale + 2*--bezel`, in the
 shared `body` rule), so resizing the device cannot desync breakout placement.
@@ -74,8 +75,12 @@ Tune `--screen-scale`, never `--device-w`. Card styling: `--breakout-radius`,
 
 ## Invariants (enforced by `base.css`)
 
-- **Exact canvas size** — iPhone 1290×2796, iPad 2064×2752. The QA loop verifies
-  with `sips -g pixelWidth -g pixelHeight`.
+- **Exact canvas size** — iPhone 1290×2796, iPad 2064×2752, iPhone Duo cover
+  1398×2034. The QA loop verifies with `sips -g pixelWidth -g pixelHeight`.
+- **Duo raws keep their vertical bar** — a Duo cover capture carries the
+  system's trailing vertical bar (clock, wifi, the app's toolbar items,
+  ~252px wide). It is part of the raw: never crop it out, never draw an
+  island over it, and never pick it as a breakout panel.
 - **Uniform type scale** — `--verb-size` / `--desc-size` are set once and apply
   to every shot in the set. If a headline overflows, adjust the set-wide scale
   or reword — never add a per-shot size override.
@@ -100,7 +105,7 @@ Tune `--screen-scale`, never `--device-w`. Card styling: `--breakout-radius`,
 ## Render sequence (strictly sequential, one agent-browser session)
 
 ```bash
-agent-browser set viewport 1290 2796          # 2064 2752 for iPad
+agent-browser set viewport 1290 2796          # 2064 2752 for iPad, 1398 2034 for Duo
 agent-browser open "file://$PWD/01-<slug>.html"
 agent-browser wait "body.ready"               # fonts loaded + images decoded
 agent-browser screenshot 01-<slug>.png
@@ -190,7 +195,7 @@ the copy genuinely has to stand.
 
 ## Developer smoke test
 
-Render both example pages, confirm dimensions, eyeball the result:
+Render all three example pages, confirm dimensions, eyeball the result:
 
 ```bash
 agent-browser set viewport 1290 2796
@@ -201,6 +206,22 @@ agent-browser set viewport 2064 2752
 agent-browser open "file://$PWD/ipad.html"
 agent-browser wait "body.ready"
 agent-browser screenshot /tmp/ipad.png
+agent-browser set viewport 1398 2034
+agent-browser open "file://$PWD/duo.html"
+agent-browser wait "body.ready"
+agent-browser screenshot /tmp/duo.png
 agent-browser close
-sips -g pixelWidth -g pixelHeight /tmp/iphone.png /tmp/ipad.png
+sips -g pixelWidth -g pixelHeight -g hasAlpha /tmp/iphone.png /tmp/ipad.png /tmp/duo.png
+```
+
+If `agent-browser screenshot` hangs on `Page.captureScreenshot` (it can on
+these large viewports), the plain-headless-Chrome fallback from SKILL.md's
+Failure handling renders the same page; the NOT-READY banner keeps it
+fail-closed:
+
+```bash
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless \
+  --screenshot=/tmp/duo.png --window-size=1398,2034 \
+  --force-device-scale-factor=1 --hide-scrollbars --virtual-time-budget=10000 \
+  "file://$PWD/duo.html"
 ```

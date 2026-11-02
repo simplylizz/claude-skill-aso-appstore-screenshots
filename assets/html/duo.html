@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<!-- ============================================================================
+     duo.html — base template for ONE iPhone Duo COVER screenshot (1398x2034).
+     Same structure as iphone.html / ipad.html; only the body class (.duo) and
+     viewport differ. Reuses the set's design language via set.css.
+     The raw keeps the system's trailing VERTICAL BAR (clock, wifi, toolbar
+     items) — it is part of the capture, so never crop it out. body.duo draws
+     no Dynamic Island / camera dot. See references/duo-extension.md.
+     Render:
+       agent-browser set viewport 1398 2034
+       agent-browser open "file://<abs path>/01-free-up-space.html"
+       agent-browser wait "body.ready"
+       agent-browser screenshot 01-free-up-space.png
+     ========================================================================= -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="base.css">
+</head>
+<body class="duo">
+
+  <!-- ===== SLOT: headline (uniform scale from set.css; do not size here) -->
+  <div class="headline">
+    <div class="verb">FREE UP</div>
+    <div class="desc">GIGABYTES OF SPACE</div>
+  </div>
+
+  <!-- ===== SLOT: device + screenshot (replace src with the Duo cover raw).
+       The OPTIONAL breakout lives INSIDE .device (after img.screen). -->
+  <div class="device">
+    <img class="screen" src="placeholder-screen-duo.png"
+         alt="app screenshot" width="1398" height="2034">
+
+    <!-- ===== SLOT: breakout (OPTIONAL) — magnified RAW-pixel copy of a panel.
+         Placement is AUTOMATIC (derived from the crop vars + --screen-scale),
+         so the card auto-occludes its source; nudge only with --shift-x/--shift-y.
+         MEASURE the crop (sample the raw, inset 8-12px inside the panel's true
+         bounds) and keep it inside the app's content area — the trailing
+         ~252px vertical bar is system chrome, not a panel. This demo crops the
+         first tile row (raw bounds x 66-1078, y 580-815) inset 10px; its
+         vertical coverage floor is 0.8211731 x 235/215 ~ 0.90, so --zoom 0.92
+         just occludes it and reads as a near-twin (~1.12x). On a real raw
+         crop a tight sub-block and reach for a >= ~1.5x read (--zoom >= ~1.2).
+         Softness is the ceiling (QA at 1:1 judges). See iphone.html +
+         SKILL.md's Breakout flow. -->
+    <div class="breakout" style="
+          --crop-x: 76px; --crop-y: 590px;
+          --crop-w: 992px; --crop-h: 215px;
+          --zoom: 0.92;">
+      <img src="placeholder-screen-duo.png" alt="">
+    </div>
+  </div>
+
+  <!-- ===== Readiness (do not edit) — FAIL-CLOSED render gate, shared via
+       ready.js (see iphone.html for the full commentary). Adds body.ready only
+       when every check passes; otherwise body.render-error + data-render-error
+       names the cause. Keep the relative src; locale pages one dir deeper use
+       ../ready.js. -->
+  <script src="ready.js"></script>
+</body>
+</html>
